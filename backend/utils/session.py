@@ -33,7 +33,7 @@ def get_current_uid():
 def get_session_dir():
     """获取当前登录用户(或演示)的数据目录,实现多用户隔离。
     未登录时回落到 legacy 'user_local'(数据接口已由 before_request 鉴权门拦截,正常不会走到这里)。"""
-    uid = get_current_uid() or 'user_local'
+    uid = get_current_uid() or '__anon__'
     session_dir = os.path.join(UPLOAD_FOLDER, uid)
     if not os.path.exists(session_dir):
         os.makedirs(session_dir, mode=0o700)  # 确保目录权限正确

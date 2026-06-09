@@ -121,24 +121,54 @@ def recognize_import():
     rows = data.get('rows') or []
     if not rows:
         return jsonify({'success': False, 'error': '没有要导入的记录'}), 400
-    uid = get_current_uid() or 'user_local'
+    uid = get_current_uid() or '__anon__'
     member_id = data.get('member_id') or member_svc.default_member_id(uid)
     name = (data.get('name') or 'AI识别账单').strip()
 
+    def _amt(v):
+        try:
+            return abs(float(str(v).replace(',', '').replace('¥', '').replace('￥', '').strip() or 0))
+        except Exception:
+            return None
+
+    VALID = ['收入', '支出', '转入', '转出', '不计收支']
     session_dir = get_session_dir()
     safe = ''.join(c for c in name if c.isalnum() or c in ('_', '-')) or 'ai_bill'
     filename = f"ai_{safe}_{datetime.now().strftime('%H%M%S')}.csv"
     path = os.path.join(session_dir, filename)
-    with open(path, 'w', encoding='utf-8-sig', newline='') as f:
-        f.write("------------------------------------------------------------------------------------\n导出信息：\n姓名：-\n")
-        f.write(f"账户：{name}  [AI识别·银行对账单转换样式]\n共{len(rows)}笔记录\n")
-        f.write("------------------------银行对账单转换  支付宝样式------------------------\n")
-        w = csv.writer(f)
-        f.write(_ALIPAY_HDR + "\n")
-        for r in rows:
-            w.writerow([r.get('交易时间', ''), r.get('交易分类', ''), r.get('交易对方', ''), '',
-                        r.get('商品说明', ''), r.get('收/支', '支出'), f"{float(r.get('金额', 0)):.2f}",
-                        r.get('收/付款方式', ''), '交易成功', '', '', ''])
+    written = 0
+    try:
+        with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write("------------------------------------------------------------------------------------\n导出信息：\n姓名：-\n")
+            f.write(f"账户：{name}  [AI识别·银行对账单转换样式]\n共{len(rows)}笔记录\n")
+            f.write("------------------------银行对账单转换  支付宝样式------------------------\n")
+            w = csv.writer(f)
+            f.write(_ALIPAY_HDR + "\n")
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+                amt = _amt(r.get('金额', 0))
+                t = str(r.get('交易时间', '')).strip()
+                if amt is None or amt <= 0 or not t:
+                    continue   # 跳过金额非法/为空时间的脏行
+                zhi = str(r.get('收/支', '支出')).strip()
+                if zhi not in VALID:
+                    zhi = '支出'
+                w.writerow([t, r.get('交易分类', ''), r.get('交易对方', ''), '',
+                            r.get('商品说明', ''), zhi, f"{amt:.2f}",
+                            r.get('收/付款方式', ''), '交易成功', '', '', ''])
+                written += 1
+    except Exception as e:
+        if os.path.exists(path):
+            os.remove(path)   # 出错删半成品,避免脏文件被加载
+        logger.exception("AI 识别导入写文件失败")
+        return jsonify({'success': False, 'error': f'导入失败: {e}'}), 400
+
+    if written == 0:
+        if os.path.exists(path):
+            os.remove(path)
+        return jsonify({'success': False, 'error': '没有有效记录可导入(金额或时间不合法)'}), 400
+
     member_svc.set_file_member(uid, filename, member_id)
-    logger.info(f"AI 识别导入 {len(rows)} 笔 → {filename} (member={member_id})")
-    return jsonify({'success': True, 'filename': filename, 'count': len(rows)})
+    logger.info(f"AI 识别导入 {written} 笔 → {filename} (member={member_id})")
+    return jsonify({'success': True, 'filename': filename, 'count': written})

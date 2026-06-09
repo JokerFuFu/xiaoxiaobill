@@ -17,7 +17,7 @@ members_bp = Blueprint('members', __name__)
 
 
 def _uid():
-    return get_current_uid() or 'user_local'
+    return get_current_uid() or '__anon__'
 
 
 @members_bp.route('/api/members', methods=['GET'])

@@ -31,11 +31,20 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useSessionStore } from '@/stores/session'
 import api from '@/api/client'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const sessionStore = useSessionStore()
+
+// 只接受站内相对路径,防开放重定向;数组取首个
+function safeRedirect() {
+  let r = route.query.redirect
+  if (Array.isArray(r)) r = r[0]
+  return (typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')) ? r : '/'
+}
 
 const username = ref('')
 const password = ref('')
@@ -48,7 +57,7 @@ async function onLogin() {
   loading.value = true
   try {
     await auth.login(username.value, password.value)
-    router.replace(route.query.redirect || '/')
+    router.replace(safeRedirect())
   } catch (e) {
     error.value = e.message || '登录失败'
   } finally {
@@ -59,7 +68,8 @@ async function onLogin() {
 async function onDemo() {
   loading.value = true
   try {
-    await api.enterDemo()
+    // 用 session store 进入演示(同时写 isDemo+localStorage),再刷新 auth 态,二者一致
+    await sessionStore.enterDemoMode()
     await auth.refresh()
     router.replace('/')
   } catch (e) {

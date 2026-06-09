@@ -11,6 +11,7 @@
 - POST /api/admin/users/<id>/password  重置某用户密码(管理员)
 """
 import logging
+from functools import wraps
 from flask import Blueprint, jsonify, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 
@@ -18,6 +19,18 @@ from services import auth as auth_svc
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__)
+
+
+def admin_required(f):
+    """管理员双重校验(纵深防御,不只依赖 before_request 的路径前缀拦截)。"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'success': False, 'error': '未登录', 'code': 'AUTH_REQUIRED'}), 401
+        if not current_user.is_admin:
+            return jsonify({'success': False, 'error': '需要管理员权限'}), 403
+        return f(*args, **kwargs)
+    return wrapper
 
 
 @auth_bp.route('/api/auth/login', methods=['POST'])
@@ -72,12 +85,14 @@ def change_my_password():
 # ============ 管理员:用户管理 ============
 @auth_bp.route('/api/admin/users', methods=['GET'])
 @login_required
+@admin_required
 def admin_list_users():
     return jsonify({'success': True, 'users': auth_svc.list_users()})
 
 
 @auth_bp.route('/api/admin/users', methods=['POST'])
 @login_required
+@admin_required
 def admin_create_user():
     data = request.get_json(silent=True) or {}
     try:
@@ -91,6 +106,7 @@ def admin_create_user():
 
 @auth_bp.route('/api/admin/users/<uid>', methods=['DELETE'])
 @login_required
+@admin_required
 def admin_delete_user(uid):
     if uid == current_user.id:
         return jsonify({'success': False, 'error': '不能删除当前登录账号'}), 400
@@ -103,6 +119,7 @@ def admin_delete_user(uid):
 
 @auth_bp.route('/api/admin/users/<uid>/password', methods=['POST'])
 @login_required
+@admin_required
 def admin_reset_password(uid):
     data = request.get_json(silent=True) or {}
     try:

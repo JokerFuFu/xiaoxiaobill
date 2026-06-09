@@ -54,7 +54,7 @@ def upload_file():
         # 成员归属:上传时整份文件归到某成员(未指定则归默认成员「本人」)
         from utils.session import get_current_uid
         from services import members as member_svc
-        uid = get_current_uid() or 'user_local'
+        uid = get_current_uid() or '__anon__'
         member_id = request.form.get('member_id') or member_svc.default_member_id(uid)
         member_svc.set_file_member(uid, filename, member_id)
 
@@ -84,7 +84,7 @@ def list_files():
     from utils.session import get_current_uid
     from services import members as member_svc
     session_dir = get_session_dir()
-    uid = get_current_uid() or 'user_local'
+    uid = get_current_uid() or '__anon__'
     file_member = member_svc.get_file_member_map(uid)
     name_map = member_svc.member_name_map(uid)
     default_mid = member_svc.default_member_id(uid)
@@ -120,7 +120,7 @@ def delete_file(filename):
             os.remove(filepath)
             from utils.session import get_current_uid
             from services import members as member_svc
-            member_svc.remove_file_member(get_current_uid() or 'user_local', secure_filename(filename))
+            member_svc.remove_file_member(get_current_uid() or '__anon__', secure_filename(filename))
             clear_data_cache()
             return jsonify({'success': True})
         else:

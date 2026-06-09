@@ -197,7 +197,10 @@ const newMemberName = ref('')
 async function reloadMembers() {
   await membersStore.load(true)
   members.value = membersStore.members
-  if (!uploadMember.value) uploadMember.value = membersStore.defaultId()
+  // 当前选中成员不存在(如刚被删)或未设 → 重置为默认成员
+  if (!uploadMember.value || !members.value.some(m => m.id === uploadMember.value)) {
+    uploadMember.value = membersStore.defaultId()
+  }
 }
 
 async function addMember() {

@@ -120,10 +120,11 @@ def _require_auth():
     if p in _PUBLIC_API:
         return
     if session.get('is_demo'):
-        # 演示模式:只读样本数据,禁止写操作与管理操作
-        if p.startswith('/api/admin/') or p in ('/api/upload', '/api/clear_data') \
-                or p.startswith('/api/members') and request.method != 'GET' \
-                or p.startswith('/api/ai/recognize'):
+        # 演示模式:只读样本数据。正向白名单——禁止一切写操作与管理操作,
+        # 仅放行 GET 以及少数只读/安全的 POST(进出演示、登出、AI 只读对话)。
+        _demo_safe_post = ('/api/demo/enter', '/api/demo/exit', '/api/auth/logout', '/api/ai/chat')
+        is_write = request.method != 'GET' and p not in _demo_safe_post
+        if p.startswith('/api/admin/') or is_write:
             return jsonify({'success': False, 'error': '演示模式不可执行该操作'}), 403
         return
     if not current_user.is_authenticated:

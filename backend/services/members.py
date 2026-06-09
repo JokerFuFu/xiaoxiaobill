@@ -120,8 +120,8 @@ def delete_member(uid, member_id):
             raise ValueError('至少保留一个成员')
         ms = [m for m in ms if m['id'] != member_id]
         _save_json(_mfile(uid), ms)
-        # 该成员名下文件回落默认
-        defm = ms[0]['id']
+        # 该成员名下文件回落到默认成员(本人),而非碰巧排首位的成员
+        defm = next((m['id'] for m in ms if m.get('is_self')), ms[0]['id'])
         fm = get_file_member_map(uid)
         changed = False
         for fn, mid in list(fm.items()):
