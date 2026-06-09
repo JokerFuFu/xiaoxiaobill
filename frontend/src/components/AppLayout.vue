@@ -15,6 +15,19 @@
         <img src="/images/logo_128.png" alt="小遥账单助手" class="logo-icon" />
         <span>小遥账单</span>
       </div>
+
+      <!-- 当前用户 / 登出(置顶,避免被底部浮动筛选条遮挡) -->
+      <div class="user-box">
+        <div class="user-info">
+          <i class="fas fa-user-circle"></i>
+          <span class="user-name">{{ authStore.displayName || '未登录' }}</span>
+          <span v-if="authStore.isAdmin" class="user-badge">管理员</span>
+        </div>
+        <button class="logout-btn" @click="onLogout" title="退出登录">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </div>
+
       <nav class="nav-menu">
         <router-link to="/" class="nav-item" :class="{ active: $route.path === '/' }">
           <i class="fas fa-home icon-home"></i>
@@ -69,18 +82,6 @@
           <span>关于作者</span>
         </router-link>
       </nav>
-
-      <!-- 当前用户 / 登出 -->
-      <div class="user-box">
-        <div class="user-info">
-          <i class="fas fa-user-circle"></i>
-          <span class="user-name">{{ authStore.displayName || '未登录' }}</span>
-          <span v-if="authStore.isAdmin" class="user-badge">管理员</span>
-        </div>
-        <button class="logout-btn" @click="onLogout" title="退出登录">
-          <i class="fas fa-sign-out-alt"></i>
-        </button>
-      </div>
     </aside>
 
     <!-- 主内容区域 -->
@@ -199,11 +200,11 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-/* 侧栏底部:当前用户 + 登出 */
+/* 侧栏顶部:当前用户 + 登出 */
 .user-box {
-  margin-top: auto;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-color);
+  padding: 10px 16px;
+  margin: 0 8px 4px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -263,7 +264,7 @@ onMounted(async () => {
 }
 
 .nav-menu {
-  padding: 8px 0;
+  padding: 8px 0 190px;   /* 底部留白,避免最后几项被浮动筛选条遮挡 */
   flex: 1;
 }
 
