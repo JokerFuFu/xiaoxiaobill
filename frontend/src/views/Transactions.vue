@@ -14,6 +14,10 @@
           <input v-model="filters.startDate" type="date" class="filter-date" title="起始日期" @change="onFilterChange" />
           <span class="filter-sep">~</span>
           <input v-model="filters.endDate" type="date" class="filter-date" title="结束日期" @change="onFilterChange" />
+          <select v-model="filters.member" @change="onFilterChange" class="filter-select" title="成员">
+            <option value="">全部成员</option>
+            <option v-for="m in memberList" :key="m.id" :value="m.name">{{ m.name }}</option>
+          </select>
           <select v-model="filters.source" @change="onFilterChange" class="filter-select">
             <option value="">全部来源</option>
             <option value="支付宝">支付宝</option>
@@ -215,6 +219,7 @@ const pagination = reactive({
 const filters = reactive({
   startDate: '',
   endDate: '',
+  member: '',
   source: '',
   channel: '',
   category: '',
@@ -223,6 +228,8 @@ const filters = reactive({
   maxAmount: null,
   search: ''
 })
+
+const memberList = ref([])
 
 const summary = reactive({ count: 0, income: 0, expense: 0, net: 0, transfer_in: 0, transfer_out: 0, internal: 0 })
 
@@ -290,10 +297,11 @@ async function loadTransactions() {
     // 只有当值存在时才添加参数
     if (filters.startDate) params.start_date = filters.startDate
     if (filters.endDate) params.end_date = filters.endDate
+    if (filters.member) params.member = filters.member
     if (filters.source) params.source = filters.source
     if (filters.channel) params.channel = filters.channel
     if (filters.category) params.category = filters.category
-    if (filters.type && !isTransfer.value) params.type = filters.type
+    if (filters.type) params.type = filters.type
     if (filters.search) params.search = filters.search
 
     // 全局大额/小额筛选(侧边栏)
@@ -379,6 +387,7 @@ function onFilterChange() {
 function resetFilters() {
   filters.startDate = ''
   filters.endDate = ''
+  filters.member = ''
   filters.source = ''
   filters.channel = ''
   filters.category = ''
@@ -387,6 +396,13 @@ function resetFilters() {
   filters.maxAmount = null
   filters.search = ''
   onFilterChange()
+}
+
+async function loadMembers() {
+  try {
+    const r = await api.getMembers()
+    memberList.value = r.members || []
+  } catch (e) { memberList.value = [] }
 }
 
 // 跳转到指定页码
@@ -403,6 +419,7 @@ onMounted(async () => {
 
   await loadAvailableMonths()
   await loadCategories()
+  await loadMembers()
   await loadTransactions()
 
   console.log('[Transactions] Initial load complete')

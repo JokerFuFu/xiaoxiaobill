@@ -15,6 +15,15 @@ services:
       - APP_NAME=小遥账单助手
       - APP_ENV=production
       - DEBUG=False
+      # 多用户:bootstrap 管理员(仅首次启动生效),可在同目录 .env 覆盖
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-jokerfu}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-jokerfu@2026}
+      - ADMIN_DISPLAY=${ADMIN_DISPLAY:-傅广健}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-}
+      # AI(Anthropic 兼容端点,默认 Kimi);API Key 放在同目录 .env(不入库)
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.kimi.com/coding/}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-kimi-k2-0905-preview}
     volumes:
       - backend-data:/app/data
     networks:

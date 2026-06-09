@@ -52,15 +52,35 @@
           <i class="fas fa-credit-card icon-channels"></i>
           <span>渠道分析</span>
         </router-link>
+        <router-link to="/ai" class="nav-item" :class="{ active: $route.path === '/ai' }">
+          <i class="fas fa-robot icon-ai"></i>
+          <span>AI 助手</span>
+        </router-link>
         <router-link to="/settings" class="nav-item" :class="{ active: $route.path === '/settings' }">
           <i class="fas fa-cog icon-settings"></i>
           <span>设置</span>
+        </router-link>
+        <router-link v-if="authStore.isAdmin" to="/admin" class="nav-item" :class="{ active: $route.path === '/admin' }">
+          <i class="fas fa-users-cog icon-admin"></i>
+          <span>用户管理</span>
         </router-link>
         <router-link to="/about-author" class="nav-item" :class="{ active: $route.path === '/about-author' }">
           <i class="fas fa-user-circle icon-author"></i>
           <span>关于作者</span>
         </router-link>
       </nav>
+
+      <!-- 当前用户 / 登出 -->
+      <div class="user-box">
+        <div class="user-info">
+          <i class="fas fa-user-circle"></i>
+          <span class="user-name">{{ authStore.displayName || '未登录' }}</span>
+          <span v-if="authStore.isAdmin" class="user-badge">管理员</span>
+        </div>
+        <button class="logout-btn" @click="onLogout" title="退出登录">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </div>
     </aside>
 
     <!-- 主内容区域 -->
@@ -114,15 +134,25 @@
 
 <script setup>
 import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUiStore } from '@/stores/ui'
 import { useSessionStore } from '@/stores/session'
 import { useFilterStore } from '@/stores/filter'
+import { useAuthStore } from '@/stores/auth'
 import Toast from '@/components/common/Toast.vue'
 import Modal from '@/components/common/Modal.vue'
 
 const uiStore = useUiStore()
 const sessionStore = useSessionStore()
 const filterStore = useFilterStore()
+const authStore = useAuthStore()
+const router = useRouter()
+
+async function onLogout() {
+  if (!confirm('确定退出登录吗？')) return
+  await authStore.logout()
+  window.location.href = '/login'
+}
 
 async function exitDemoMode() {
   if (confirm('确定要退出演示模式吗？')) {
@@ -165,7 +195,53 @@ onMounted(async () => {
   border-right: 1px solid var(--border-color);
   z-index: 1000;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
+
+/* 侧栏底部:当前用户 + 登出 */
+.user-box {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  color: var(--text-color);
+  font-size: 14px;
+}
+.user-info .user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-badge {
+  font-size: 11px;
+  color: #fff;
+  background: #007AFF;
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+.logout-btn {
+  background: none;
+  border: none;
+  color: #86868b;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px;
+  border-radius: 8px;
+}
+.logout-btn:hover { color: #ff3b30; background: rgba(255, 59, 48, 0.08); }
+.icon-ai { color: #AF52DE; }
+.icon-admin { color: #FF9500; }
 
 .logo {
   font-family: var(--font-family-display);

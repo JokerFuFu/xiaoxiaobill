@@ -124,7 +124,39 @@ export const api = {
   /**
    * 获取会话状态 (特殊处理 - 后端返回格式不同)
    */
-  getSessionStatus: () => getSessionStatus()
+  getSessionStatus: () => getSessionStatus(),
+
+  // ==================== 鉴权 / 用户管理 ====================
+  authMe: () => get('/auth/me'),
+  login: (username, password) => post('/auth/login', { username, password }),
+  logout: () => post('/auth/logout', {}),
+  changePassword: (old_password, new_password) => post('/auth/password', { old_password, new_password }),
+  adminListUsers: () => get('/admin/users'),
+  adminCreateUser: (payload) => post('/admin/users', payload),
+  adminDeleteUser: (uid) => delete_(`/admin/users/${uid}`),
+  adminResetPassword: (uid, password) => post(`/admin/users/${uid}/password`, { password }),
+
+  // ==================== 成员维度 ====================
+  getMembers: () => get('/members'),
+  addMember: (name, color) => post('/members', { name, color }),
+  updateMember: (id, payload) => put(`/members/${id}`, payload),
+  deleteMember: (id) => delete_(`/members/${id}`),
+  getMemberAnalysis: (params) => get('/member_analysis', params),
+
+  // ==================== AI ====================
+  aiStatus: () => get('/ai/status'),
+  aiChat: (question, history) => post('/ai/chat', { question, history }),
+  aiRecognize: (formData) => post('/ai/recognize', formData),
+  aiRecognizeText: (text, hint) => post('/ai/recognize', { text, hint }),
+  aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name })
+}
+
+// 401 未登录 → 跳登录页(登录页本身不跳,避免循环)
+function _check401(response) {
+  if (response.status === 401 && !window.location.pathname.startsWith('/login')) {
+    window.location.href = '/login'
+    throw new Error('未登录')
+  }
 }
 
 // ==================== 请求封装函数 ====================
@@ -146,7 +178,8 @@ async function get(endpoint, params) {
 
   console.log('[API] GET request to:', url.toString())
 
-  const response = await fetch(url)
+  const response = await fetch(url, { credentials: 'same-origin' })
+  _check401(response)
   const data = await response.json()
 
   console.log('[API] Response:', data)
@@ -179,9 +212,11 @@ async function post(endpoint, data) {
 
   const response = await fetch(API_BASE + endpoint, {
     method: 'POST',
+    credentials: 'same-origin',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
     body: isFormData ? data : JSON.stringify(data)
   })
+  _check401(response)
 
   const result = await response.json()
 
@@ -206,8 +241,10 @@ async function post(endpoint, data) {
  */
 async function delete_(endpoint) {
   const response = await fetch(API_BASE + endpoint, {
-    method: 'DELETE'
+    method: 'DELETE',
+    credentials: 'same-origin'
   })
+  _check401(response)
 
   const data = await response.json()
 
@@ -224,6 +261,29 @@ async function delete_(endpoint) {
   // 如果没有 data 字段，返回整个响应对象（去掉 success 字段）
   const { success, ...result } = data
   return result
+}
+
+/**
+ * PUT 请求
+ */
+async function put(endpoint, data) {
+  const response = await fetch(API_BASE + endpoint, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data || {})
+  })
+  _check401(response)
+
+  const result = await response.json()
+  if ('success' in result && !result.success) {
+    throw new Error(result.error || '请求失败')
+  }
+  if ('data' in result) {
+    return result.data
+  }
+  const { success, ...responseData } = result
+  return responseData
 }
 
 /**
