@@ -404,6 +404,25 @@ def analyze_bank_cards(df):
     return out
 
 
+def analyze_members(df):
+    """成员维度：每个成员的支出/收入/转入/转出/笔数。颜色由 API 层按 members.json 附加。"""
+    if '成员' not in df.columns:
+        return []
+    d = df[~df['是否退款'].fillna(False)] if '是否退款' in df.columns else df
+    out = []
+    for name, g in d.groupby('成员'):
+        out.append({
+            'member': str(name),
+            'expense': round(float(g[g['收/支'] == '支出']['金额'].sum()), 2),
+            'income': round(float(g[g['收/支'] == '收入']['金额'].sum()), 2),
+            'transfer_in': round(float(g[g['收/支'] == '转入']['金额'].sum()), 2),
+            'transfer_out': round(float(g[g['收/支'] == '转出']['金额'].sum()), 2),
+            'count': int(len(g)),
+        })
+    out.sort(key=lambda x: -x['expense'])
+    return out
+
+
 # ============ 渠道分析（银行卡/储蓄·信用/支付宝/微信 多维） ============
 # 电子钱包/虚拟账户识别规则（按特异性排序：长词在前，避免"余额宝/账户余额"被"余额"截胡）
 _WALLET_RULES = [

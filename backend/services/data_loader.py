@@ -18,8 +18,8 @@ from utils.session import get_session_dir
 logger = logging.getLogger(__name__)
 
 
-# 去重所用的稳定标识列
-_DEDUP_KEYS = ['交易时间', '金额', '来源', '交易对方', '商品说明', '收/支']
+# 去重所用的稳定标识列(含「成员」:不同成员的同形态交易不应被合并)
+_DEDUP_KEYS = ['交易时间', '金额', '来源', '交易对方', '商品说明', '收/支', '成员']
 
 # 平台(支付宝/微信)转账类分类 → 统一归一为 转入/转出，与银行口径一致
 _TRANSFER_CATS = ['转账', '转账红包', '群收款', '微信红包', '微信红包（群红包）', '微信红包（单发）', '二维码收款', '红包']
@@ -65,6 +65,8 @@ def load_demo_data():
         df['是否退款'] = False
     if '来源' not in df.columns:
         df['来源'] = '示例数据'
+    if '成员' not in df.columns:
+        df['成员'] = '本人'
 
     logger.info(f"加载演示数据: {len(df)} 条记录")
     return df
@@ -89,9 +91,24 @@ def load_alipay_data():
         session_dir = get_session_dir()
         all_data = []
 
+        # 成员维度:解析每个文件后,按 文件→成员 映射盖上「成员」列(整份文件归一个成员)
+        from services.members import get_file_member_map, member_name_map, default_member_id
+        uid = os.path.basename(session_dir)
+        try:
+            file_member = get_file_member_map(uid)
+            name_map = member_name_map(uid)
+            default_mid = default_member_id(uid)
+        except Exception:
+            file_member, name_map, default_mid = {}, {}, None
+
+        def _member_of(fn):
+            mid = file_member.get(fn, default_mid)
+            return name_map.get(mid, '本人')
+
         # 读取会话目录中的所有文件
         for filename in os.listdir(session_dir):
             filepath = os.path.join(session_dir, filename)
+            df = None
 
             # 处理 CSV 文件
             if filename.endswith('.csv'):
@@ -103,9 +120,6 @@ def load_alipay_data():
                         df = parse_bank_csv(filepath)   # 银行 PDF 转换的支付宝样式 CSV(已去重/已分类转入转出)
                     else:
                         df = parse_alipay_csv(filepath)
-                    if df is not None and not df.empty:
-                        all_data.append(df)
-
                 except Exception as e:
                     logger.error(f"处理 CSV 文件 {filename} 失败: {str(e)}")
                     continue
@@ -114,7 +128,6 @@ def load_alipay_data():
             elif filename.endswith('.xlsx'):
                 try:
                     df = parse_wechat_xlsx(filepath)
-                    all_data.append(df)
                 except Exception as e:
                     logger.error(f"处理 XLSX 文件 {filename} 失败: {str(e)}")
                     continue
@@ -123,11 +136,13 @@ def load_alipay_data():
             elif filename.lower().endswith('.pdf'):
                 try:
                     df = parse_bank_pdf(filepath)
-                    if df is not None and not df.empty:
-                        all_data.append(df)
                 except Exception as e:
                     logger.error(f"处理 PDF 银行账单 {filename} 失败: {str(e)}")
                     continue
+
+            if df is not None and not df.empty:
+                df['成员'] = _member_of(filename)   # 整份文件归属同一成员
+                all_data.append(df)
 
         if not all_data:
             raise FileNotFoundError("未找到任何支付宝(.csv)/微信(.xlsx)/银行(.pdf)账单文件")

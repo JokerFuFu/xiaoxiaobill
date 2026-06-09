@@ -63,3 +63,10 @@ runtime/
 runtime_backup/
 
 .gstack/
+
+# 多用户:账号表/密钥/会话(含敏感信息,勿入库)
+data/users.json
+data/.flask_secret
+data/flask_sessions/
+backend/data/users.json
+backend/data/.flask_secret

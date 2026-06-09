@@ -16,3 +16,8 @@ colorama>=0.4.4
 blinker>=1.4
 openpyxl>=3.0.0
 pdfplumber>=0.11.0
+
+# 多用户鉴权(成熟开源方案 Flask-Login,非自造轮子)
+Flask-Login>=0.6.0,<0.7.0
+# AI 功能:调用 Anthropic 兼容端点(Kimi)
+requests>=2.28.0

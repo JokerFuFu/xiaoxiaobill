@@ -17,18 +17,26 @@ logger = logging.getLogger(__name__)
 _cache_store = {}
 
 
+def get_current_uid():
+    """当前数据空间的 uid:演示模式=demo_user;已登录=登录用户id;否则 None(未登录)。"""
+    if session.get('is_demo'):
+        return 'demo_user'
+    try:
+        from flask_login import current_user
+        if current_user and current_user.is_authenticated:
+            return current_user.id
+    except Exception:
+        pass
+    return None
+
+
 def get_session_dir():
-    """获取当前会话的临时目录"""
-    if 'user_id' not in session:
-        # session['user_id'] = f"user_{token_hex(16)}"
-        # 本地应用，使用固定的用户标识
-        session['user_id'] = f"user_local"
-
-    session_dir = os.path.join(UPLOAD_FOLDER, session['user_id'])
-
+    """获取当前登录用户(或演示)的数据目录,实现多用户隔离。
+    未登录时回落到 legacy 'user_local'(数据接口已由 before_request 鉴权门拦截,正常不会走到这里)。"""
+    uid = get_current_uid() or 'user_local'
+    session_dir = os.path.join(UPLOAD_FOLDER, uid)
     if not os.path.exists(session_dir):
         os.makedirs(session_dir, mode=0o700)  # 确保目录权限正确
-
     return session_dir
 
 

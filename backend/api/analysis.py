@@ -34,6 +34,7 @@ from services.analysis import (
     analyze_weekend_vs_monday,
     analyze_payment_methods,
     analyze_bank_cards,
+    analyze_members,
     analyze_channels,
     _build_channel_metas,
     generate_smart_tags,
@@ -71,6 +72,36 @@ analysis_bp = Blueprint('analysis', __name__)
 
 # ============ 综合分析 API ============
 
+def _member_analysis_with_colors(df):
+    """成员维度 + 按 members.json 附加成员配色。"""
+    rows = analyze_members(df)
+    try:
+        from utils.session import get_current_uid
+        from services import members as member_svc
+        cmap = {m['name']: m.get('color', '#8E8E93') for m in member_svc.list_members(get_current_uid() or 'user_local')}
+    except Exception:
+        cmap = {}
+    for r in rows:
+        r['color'] = cmap.get(r['member'], '#8E8E93')
+    return rows
+
+
+@analysis_bp.route('/api/member_analysis')
+def member_analysis():
+    """成员维度独立接口(供成员对比卡片)。"""
+    try:
+        df = load_alipay_data()
+        year = request.args.get('year', type=int)
+        if year:
+            df = df[df['交易时间'].dt.year == year]
+        return jsonify({'success': True, 'members': _member_analysis_with_colors(df)})
+    except FileNotFoundError:
+        return jsonify({'success': True, 'members': []})
+    except Exception as e:
+        logger.error(f"member_analysis error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @analysis_bp.route('/api/analysis')
 def get_analysis():
     """综合分析 API"""
@@ -107,6 +138,7 @@ def get_analysis():
                 'tags': generate_smart_tags(df),
                 'payment_analysis': analyze_payment_methods(df),
                 'bank_card_analysis': analyze_bank_cards(df),
+                'member_analysis': _member_analysis_with_colors(df),
                 'chord_data': generate_chord_data(df),
                 'funnel_data': generate_funnel_data(df),
                 'quadrant_data': generate_quadrant_data(df),
@@ -996,6 +1028,7 @@ def get_transactions():
         end_date = request.args.get('end_date')
         source = request.args.get('source')
         channel = request.args.get('channel')
+        member = request.args.get('member')
         view = request.args.get('view', 'normal')  # normal=收支(排除转账) / transfer=转账记录
 
         # 渠道下拉选项（全集去退款后，按笔数倒序，稳定不随其它筛选漂移）
@@ -1008,6 +1041,8 @@ def get_transactions():
             df = df[df['收/支'] == type_]
         if source:
             df = df[df['来源'] == source]
+        if member and '成员' in df.columns:
+            df = df[df['成员'] == member]
         if channel:
             df = df[df['_channel'] == channel]
         if start_date:

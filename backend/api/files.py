@@ -51,6 +51,13 @@ def upload_file():
         session_dir = get_session_dir()
         filename = save_uploaded_file(file, session_dir)
 
+        # 成员归属:上传时整份文件归到某成员(未指定则归默认成员「本人」)
+        from utils.session import get_current_uid
+        from services import members as member_svc
+        uid = get_current_uid() or 'user_local'
+        member_id = request.form.get('member_id') or member_svc.default_member_id(uid)
+        member_svc.set_file_member(uid, filename, member_id)
+
         # 更新会话时间戳
         now_ts = datetime.now().timestamp()
         session['created_at'] = now_ts
@@ -62,6 +69,7 @@ def upload_file():
         return jsonify({
             'success': True,
             'filename': filename,
+            'member_id': member_id,
             'message': '文件上传成功'
         })
 
@@ -73,7 +81,13 @@ def upload_file():
 @files_bp.route('/api/files')
 def list_files():
     """列出当前会话的文件"""
+    from utils.session import get_current_uid
+    from services import members as member_svc
     session_dir = get_session_dir()
+    uid = get_current_uid() or 'user_local'
+    file_member = member_svc.get_file_member_map(uid)
+    name_map = member_svc.member_name_map(uid)
+    default_mid = member_svc.default_member_id(uid)
     files = []
     if os.path.exists(session_dir):
         for filename in os.listdir(session_dir):
@@ -83,7 +97,9 @@ def list_files():
                     'name': filename,
                     'size': os.path.getsize(filepath),
                     'size_formatted': format_file_size(os.path.getsize(filepath)),
-                    'source': detect_file_source(filepath)
+                    'source': detect_file_source(filepath),
+                    'member_id': file_member.get(filename, default_mid),
+                    'member': name_map.get(file_member.get(filename, default_mid), '本人'),
                 })
 
     files.sort(key=lambda x: x['name'])
@@ -102,6 +118,9 @@ def delete_file(filename):
 
         if os.path.exists(filepath):
             os.remove(filepath)
+            from utils.session import get_current_uid
+            from services import members as member_svc
+            member_svc.remove_file_member(get_current_uid() or 'user_local', secure_filename(filename))
             clear_data_cache()
             return jsonify({'success': True})
         else:
