@@ -7,52 +7,112 @@
 
     <!-- 卡片容器 -->
     <div class="card">
-      <!-- 表格头部和筛选器 -->
+      <!-- 表格头部 -->
       <div class="table-header">
         <h3>{{ tableTitle }}</h3>
-        <div class="table-filters">
-          <input v-model="filters.startDate" type="date" class="filter-date" title="起始日期" @change="onFilterChange" />
-          <span class="filter-sep">~</span>
-          <input v-model="filters.endDate" type="date" class="filter-date" title="结束日期" @change="onFilterChange" />
-          <select v-model="filters.member" @change="onFilterChange" class="filter-select" title="成员">
-            <option value="">全部成员</option>
+        <div class="filter-meta">
+          <span v-if="activeCount" class="active-chip">
+            <i class="fas fa-filter"></i> {{ activeCount }} 项筛选生效
+          </span>
+          <button v-if="activeCount" class="filter-reset" @click="resetFilters">
+            <i class="fas fa-rotate-left"></i> 重置
+          </button>
+        </div>
+      </div>
+
+      <!-- 筛选面板:所有列均可筛 -->
+      <div class="filter-panel">
+        <!-- 时间范围 + 快捷区间 -->
+        <div class="ff ff-span2">
+          <label>交易时间</label>
+          <div class="ff-row">
+            <input v-model="filters.startDate" type="date" @change="onFilterChange" />
+            <span class="ff-sep">—</span>
+            <input v-model="filters.endDate" type="date" @change="onFilterChange" />
+          </div>
+        </div>
+        <div class="ff ff-span2">
+          <label>快捷区间</label>
+          <div class="preset-row">
+            <button
+              v-for="p in datePresets" :key="p.key"
+              class="preset-chip" :class="{ on: isPresetActive(p) }"
+              @click="applyPreset(p)"
+            >{{ p.label }}</button>
+          </div>
+        </div>
+
+        <div class="ff">
+          <label>成员</label>
+          <select v-model="filters.member" @change="onFilterChange">
+            <option value="">全部</option>
             <option v-for="m in memberList" :key="m.id" :value="m.name">{{ m.name }}</option>
           </select>
-          <select v-model="filters.source" @change="onFilterChange" class="filter-select">
-            <option value="">全部来源</option>
+        </div>
+        <div class="ff">
+          <label>来源</label>
+          <select v-model="filters.source" @change="onFilterChange">
+            <option value="">全部</option>
             <option value="支付宝">支付宝</option>
             <option value="微信">微信</option>
             <option value="银行">银行</option>
           </select>
-          <select v-model="filters.channel" @change="onFilterChange" class="filter-select filter-channel" title="资金渠道">
-            <option value="">全部渠道</option>
+        </div>
+        <div class="ff">
+          <label>资金渠道</label>
+          <select v-model="filters.channel" @change="onFilterChange">
+            <option value="">全部</option>
             <option v-for="opt in channelOptions" :key="opt.label" :value="opt.label">
               {{ opt.label }} ({{ opt.count }})
             </option>
           </select>
-          <select v-model="filters.category" @change="onFilterChange" class="filter-select">
-            <option value="">全部分类</option>
-            <option v-for="cat in categories" :key="cat" :value="cat">
-              {{ cat }}
-            </option>
+        </div>
+        <div class="ff">
+          <label>分类</label>
+          <select v-model="filters.category" @change="onFilterChange">
+            <option value="">全部</option>
+            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
           </select>
-          <select v-model="filters.type" @change="onFilterChange" class="filter-select">
-            <option value="">全部类型</option>
+        </div>
+        <div class="ff">
+          <label>收/支类型</label>
+          <select v-model="filters.type" @change="onFilterChange">
+            <option value="">全部</option>
             <option v-if="!isTransfer" value="收入">收入</option>
             <option v-if="!isTransfer" value="支出">支出</option>
-            <option value="转入">转账-收入</option>
-            <option value="转出">转账-支出</option>
+            <option value="转入">转账-转入</option>
+            <option value="转出">转账-转出</option>
           </select>
-          <input v-model.number="filters.minAmount" type="number" min="0" placeholder="金额≥" class="filter-amount" @change="onFilterChange" />
-          <input v-model.number="filters.maxAmount" type="number" min="0" placeholder="金额≤" class="filter-amount" @change="onFilterChange" />
-          <input
-            v-model="filters.search"
-            type="text"
-            placeholder="搜索关键字..."
-            class="filter-input"
-            @keyup.enter="onFilterChange"
-          />
-          <button class="filter-reset" @click="resetFilters">重置</button>
+        </div>
+        <div class="ff">
+          <label>状态</label>
+          <select v-model="filters.status" @change="onFilterChange">
+            <option value="">全部</option>
+            <option v-for="opt in statusOptions" :key="opt.label" :value="opt.label">
+              {{ opt.label }} ({{ opt.count }})
+            </option>
+          </select>
+        </div>
+
+        <div class="ff ff-span2">
+          <label>金额范围(元)</label>
+          <div class="ff-row">
+            <input v-model.number="filters.minAmount" type="number" min="0" placeholder="最小" @change="onFilterChange" />
+            <span class="ff-sep">—</span>
+            <input v-model.number="filters.maxAmount" type="number" min="0" placeholder="最大" @change="onFilterChange" />
+          </div>
+        </div>
+        <div class="ff">
+          <label>交易对方</label>
+          <input v-model="filters.counterparty" type="text" placeholder="如 海底捞" @keyup.enter="onFilterChange" @change="onFilterChange" />
+        </div>
+        <div class="ff">
+          <label>商品说明</label>
+          <input v-model="filters.desc" type="text" placeholder="如 打车" @keyup.enter="onFilterChange" @change="onFilterChange" />
+        </div>
+        <div class="ff">
+          <label>关键字(全局)</label>
+          <input v-model="filters.search" type="text" placeholder="说明/对方/分类" @keyup.enter="onFilterChange" @change="onFilterChange" />
         </div>
       </div>
 
@@ -224,12 +284,73 @@ const filters = reactive({
   channel: '',
   category: '',
   type: '',
+  status: '',
+  counterparty: '',
+  desc: '',
   minAmount: null,
   maxAmount: null,
   search: ''
 })
 
 const memberList = ref([])
+const statusOptions = ref([])
+
+// 生效中的筛选数(时间范围算一项)
+const activeCount = computed(() => {
+  let n = 0
+  if (filters.startDate || filters.endDate) n++
+  for (const k of ['member', 'source', 'channel', 'category', 'type', 'status', 'counterparty', 'desc', 'search']) {
+    if (filters[k]) n++
+  }
+  if (filters.minAmount !== null && filters.minAmount !== '') n++
+  if (filters.maxAmount !== null && filters.maxAmount !== '') n++
+  return n
+})
+
+// ===== 快捷时间区间 =====
+function fmtDate(d) {
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+const datePresets = [
+  { key: 'thisMonth', label: '本月' },
+  { key: 'lastMonth', label: '上月' },
+  { key: 'last3', label: '近3月' },
+  { key: 'thisYear', label: '今年' }
+]
+
+function presetRange(key) {
+  const now = new Date()
+  if (key === 'thisMonth') {
+    return [fmtDate(new Date(now.getFullYear(), now.getMonth(), 1)), fmtDate(now)]
+  }
+  if (key === 'lastMonth') {
+    return [fmtDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+            fmtDate(new Date(now.getFullYear(), now.getMonth(), 0))]
+  }
+  if (key === 'last3') {
+    return [fmtDate(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())), fmtDate(now)]
+  }
+  return [fmtDate(new Date(now.getFullYear(), 0, 1)), fmtDate(now)]   // thisYear
+}
+
+function isPresetActive(p) {
+  const [s, e] = presetRange(p.key)
+  return filters.startDate === s && filters.endDate === e
+}
+
+function applyPreset(p) {
+  if (isPresetActive(p)) {
+    filters.startDate = ''
+    filters.endDate = ''
+  } else {
+    const [s, e] = presetRange(p.key)
+    filters.startDate = s
+    filters.endDate = e
+  }
+  onFilterChange()
+}
 
 const summary = reactive({ count: 0, income: 0, expense: 0, net: 0, transfer_in: 0, transfer_out: 0, internal: 0 })
 
@@ -302,6 +423,9 @@ async function loadTransactions() {
     if (filters.channel) params.channel = filters.channel
     if (filters.category) params.category = filters.category
     if (filters.type) params.type = filters.type
+    if (filters.status) params.status = filters.status
+    if (filters.counterparty) params.counterparty = filters.counterparty
+    if (filters.desc) params.desc = filters.desc
     if (filters.search) params.search = filters.search
 
     // 全局大额/小额筛选(侧边栏)
@@ -318,9 +442,12 @@ async function loadTransactions() {
     pagination.total_pages = data.pagination?.total_pages || 1
     pagination.total_records = data.pagination?.total_records || 0
     if (data.summary) Object.assign(summary, data.summary)
-    // 渠道下拉选项（仅在为空时填充，避免随筛选漂移；重置后会再填）
+    // 渠道/状态下拉选项（仅在为空时填充，避免随筛选漂移；重置后会再填）
     if (data.channel_options && channelOptions.value.length === 0) {
       channelOptions.value = data.channel_options
+    }
+    if (data.status_options && statusOptions.value.length === 0) {
+      statusOptions.value = data.status_options
     }
     if (data.chart) {
       chartData.by_category = data.chart.by_category || []
@@ -392,6 +519,9 @@ function resetFilters() {
   filters.channel = ''
   filters.category = ''
   filters.type = ''
+  filters.status = ''
+  filters.counterparty = ''
+  filters.desc = ''
   filters.minAmount = null
   filters.maxAmount = null
   filters.search = ''
@@ -505,36 +635,64 @@ onUnmounted(() => {
   margin: 0;
 }
 
-/* 筛选器 */
-.table-filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
+/* ===== 筛选面板(所有列可筛) ===== */
+.filter-meta { display: flex; align-items: center; gap: 10px; }
+.active-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #007AFF; background: #eaf3ff;
+  border-radius: 14px; padding: 4px 12px;
 }
-
-.filter-date {
-  padding: 7px 10px;
-  border: none;
-  border-radius: 8px;
-  background: var(--hover-bg);
-  color: var(--text-color);
-  font-size: 13px;
-  outline: none;
-  cursor: pointer;
-}
-.filter-sep { color: var(--text-secondary, #999); }
 .filter-reset {
-  padding: 8px 14px;
-  border: none;
-  border-radius: 8px;
-  background: var(--hover-bg);
-  color: var(--text-color);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 1px solid #e2e2e8; border-radius: 14px;
+  background: #fff; color: #6e6e73; font-size: 12.5px; cursor: pointer;
+  transition: all .15s;
 }
-.filter-reset:hover { background: var(--border-color); }
+.filter-reset:hover { border-color: #ff3b30; color: #ff3b30; }
+
+.filter-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px 14px;
+  background: var(--hover-bg, #f7f8fa);
+  border: 1px solid var(--border-color, #ebebf0);
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+  margin-bottom: 18px;
+}
+.ff { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ff-span2 { grid-column: span 2; }
+.ff > label { font-size: 11.5px; color: #86868b; padding-left: 2px; }
+.ff select, .ff input {
+  height: 36px; width: 100%; box-sizing: border-box;
+  border: 1px solid #e2e2e8; border-radius: 9px; background: #fff;
+  padding: 0 11px; font-size: 13px; color: var(--text-color, #1d1d1f);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.ff select:hover, .ff input:hover { border-color: #c8cdd4; }
+.ff select:focus, .ff input:focus {
+  border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.10);
+}
+.ff select {
+  padding-right: 30px; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8.825L1.175 4 2.238 2.938 6 6.7l3.763-3.763L10.825 4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.ff input::placeholder { color: #b3b8bf; }
+.ff input[type='date'] { cursor: pointer; }
+.ff-row { display: flex; align-items: center; gap: 8px; }
+.ff-row input { flex: 1; min-width: 0; }
+.ff-sep { color: #b3b8bf; flex-shrink: 0; font-size: 12px; }
+
+.preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-chip {
+  height: 36px; padding: 0 13px; border: 1px solid #e2e2e8; border-radius: 9px;
+  background: #fff; color: #3a3a3c; font-size: 12.5px; cursor: pointer;
+  transition: all .15s; flex: 1; min-width: 0; white-space: nowrap;
+}
+.preset-chip:hover { border-color: #007AFF; color: #007AFF; }
+.preset-chip.on { background: #007AFF; border-color: #007AFF; color: #fff; font-weight: 500; }
 
 /* 筛选结果统计汇总 */
 .filter-summary {
