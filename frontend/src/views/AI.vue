@@ -1,73 +1,95 @@
 <template>
   <div class="ai-page">
+    <!-- 头部 -->
     <div class="ai-header">
-      <h2><i class="fas fa-robot"></i> AI 助手</h2>
-      <div class="tabs">
-        <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">对话检索</button>
-        <button :class="{ active: tab === 'recognize' }" @click="tab = 'recognize'">智能识别账单</button>
+      <div class="ai-title">
+        <div class="ai-logo-badge">
+          <img src="/images/logo_128.png" alt="小遥" />
+        </div>
+        <div>
+          <h2>AI 助手</h2>
+          <p class="ai-sub">
+            <span class="status-dot" :class="{ on: enabled }"></span>
+            {{ enabled ? `已连接 · ${model}` : '未配置模型' }}
+          </p>
+        </div>
+      </div>
+      <div class="ai-actions">
+        <button v-if="messages.length" class="ghost-btn" @click="clearChat" title="清空对话">
+          <i class="fas fa-broom"></i> 清空对话
+        </button>
+        <router-link to="/settings" class="ghost-btn" title="模型配置">
+          <i class="fas fa-sliders-h"></i> 模型配置
+        </router-link>
       </div>
     </div>
 
-    <div v-if="!enabled" class="ai-disabled">
-      <i class="fas fa-plug"></i>
-      <p>AI 功能未启用。请在后端配置 <code>ANTHROPIC_API_KEY</code> 后重启。</p>
+    <!-- 未配置 -->
+    <div v-if="!enabled" class="ai-empty card">
+      <img src="/images/logo_128.png" class="empty-logo" alt="" />
+      <h3>还没有配置 AI 模型</h3>
+      <p>到「设置 → AI 模型配置」填入服务地址和 API Key 即可开始对话。</p>
+      <router-link to="/settings" class="primary-btn">去配置</router-link>
     </div>
 
-    <!-- 对话 -->
-    <div v-else-if="tab === 'chat'" class="chat">
+    <!-- 对话区 -->
+    <div v-else class="chat card">
       <div class="messages" ref="msgBox">
-        <div v-if="messages.length === 0" class="hint">
-          <p>直接用大白话问我，例如：</p>
-          <div class="examples">
-            <span v-for="ex in examples" :key="ex" @click="quickAsk(ex)">{{ ex }}</span>
+        <!-- 欢迎态 -->
+        <div v-if="messages.length === 0" class="welcome">
+          <img src="/images/logo_128.png" class="welcome-logo" alt="" />
+          <h3>你好，我是小遥</h3>
+          <p>你的私人账单分析师，用大白话问我任何账单问题</p>
+          <div class="suggest-grid">
+            <button v-for="ex in examples" :key="ex.q" class="suggest-card" @click="quickAsk(ex.q)">
+              <i :class="ex.icon"></i>
+              <span>{{ ex.q }}</span>
+            </button>
           </div>
         </div>
-        <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
-          <div class="bubble">
-            <div v-if="m.role === 'assistant'" v-html="render(m.content)"></div>
-            <span v-else>{{ m.content }}</span>
+
+        <!-- 消息流 -->
+        <div v-for="(m, i) in messages" :key="i" :class="['msg-row', m.role]">
+          <div class="avatar" :class="m.role">
+            <img v-if="m.role === 'assistant'" src="/images/logo_128.png" alt="AI" />
+            <i v-else class="fas fa-user"></i>
+          </div>
+          <div class="msg-body">
+            <div class="bubble" :class="[m.role, { error: m.error }]">
+              <div v-if="m.role === 'assistant'" class="md" v-html="render(m.content)"></div>
+              <span v-else>{{ m.content }}</span>
+            </div>
             <div v-if="m.tools && m.tools.length" class="tools">
               <span v-for="(t, ti) in m.tools" :key="ti" class="tool-chip">
-                🔎 {{ t.name }}{{ t.count != null ? ` · ${t.count}笔` : '' }}{{ t.total != null ? ` · ¥${t.total}` : '' }}
+                <i class="fas fa-magnifying-glass-chart"></i>
+                {{ toolLabel(t) }}
               </span>
             </div>
           </div>
         </div>
-        <div v-if="loading" class="msg assistant"><div class="bubble typing">思考中…</div></div>
-      </div>
-      <div class="composer">
-        <input v-model="input" @keyup.enter="send" :disabled="loading" placeholder="问问你的账单…（回车发送）" />
-        <button @click="send" :disabled="loading || !input.trim()">发送</button>
-      </div>
-    </div>
 
-    <!-- 识别账单 -->
-    <div v-else class="recognize">
-      <p class="desc">把不支持格式的账单（任意 CSV/Excel/PDF 文本，或直接粘贴文字）交给 AI 提取成交易记录。</p>
-      <div class="rec-input">
-        <textarea v-model="recText" placeholder="粘贴账单文字内容…"></textarea>
-        <div class="rec-actions">
-          <input type="file" ref="recFile" accept=".csv,.txt,.xlsx,.pdf" @change="onRecFile" />
-          <button @click="doRecognize" :disabled="recLoading">{{ recLoading ? '识别中…' : '开始识别' }}</button>
+        <!-- 打字中 -->
+        <div v-if="loading" class="msg-row assistant">
+          <div class="avatar assistant"><img src="/images/logo_128.png" alt="AI" /></div>
+          <div class="msg-body">
+            <div class="bubble assistant typing">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>
+          </div>
         </div>
       </div>
-      <div v-if="recRows.length" class="rec-result">
-        <div class="rec-head">
-          <span>识别到 {{ recRows.length }} 笔</span>
-          <select v-model="recMember">
-            <option v-for="m in members" :key="m.id" :value="m.id">归属：{{ m.name }}</option>
-          </select>
-          <button class="import-btn" @click="doImport" :disabled="recLoading">导入到账单</button>
-        </div>
-        <table>
-          <thead><tr><th>时间</th><th>分类</th><th>对方</th><th>说明</th><th>收支</th><th>金额</th></tr></thead>
-          <tbody>
-            <tr v-for="(r, i) in recRows" :key="i">
-              <td>{{ r['交易时间'] }}</td><td>{{ r['交易分类'] }}</td><td>{{ r['交易对方'] }}</td>
-              <td>{{ r['商品说明'] }}</td><td>{{ r['收/支'] }}</td><td class="amt">{{ r['金额'] }}</td>
-            </tr>
-          </tbody>
-        </table>
+
+      <!-- 输入区 -->
+      <div class="composer">
+        <input
+          v-model="input"
+          @keyup.enter="send"
+          :disabled="loading"
+          placeholder="问问你的账单，比如：这个月花最多的是什么？"
+        />
+        <button class="send-btn" @click="send" :disabled="loading || !input.trim()" title="发送">
+          <i class="fas fa-paper-plane"></i>
+        </button>
       </div>
     </div>
   </div>
@@ -75,52 +97,46 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import api from '@/api/client'
-import { useUiStore } from '@/stores/ui'
-import { useMembersStore } from '@/stores/members'
-
-const ui = useUiStore()
-const membersStore = useMembersStore()
 
 const enabled = ref(true)
-const tab = ref('chat')
-
-// 对话
+const model = ref('')
 const messages = ref([])
 const input = ref('')
 const loading = ref(false)
 const msgBox = ref(null)
+
 const examples = [
-  '我这个月花最多的是什么？',
-  '今年餐饮一共花了多少？',
-  '帮我看看大额支出（超过1000）有哪些',
-  '我每个月的收入和支出趋势'
+  { q: '我这个月花最多的是什么？', icon: 'fas fa-ranking-star' },
+  { q: '最近三个月每月收入和支出趋势', icon: 'fas fa-chart-line' },
+  { q: '超过 1000 元的大额支出有哪些？', icon: 'fas fa-coins' },
+  { q: '今年餐饮一共花了多少？', icon: 'fas fa-utensils' }
 ]
 
-// 识别
-const recText = ref('')
-const recFile = ref(null)
-const recRows = ref([])
-const recLoading = ref(false)
-const recMember = ref('')
-const members = ref([])
+marked.setOptions({ breaks: true, gfm: true })
 
 onMounted(async () => {
   try {
     const s = await api.aiStatus()
     enabled.value = s.enabled
+    model.value = s.model || ''
   } catch (e) { enabled.value = false }
-  await membersStore.load()
-  members.value = membersStore.members
-  recMember.value = membersStore.defaultId()
+  // 恢复本页会话内的历史(刷新即清,不持久化隐私对话)
 })
 
 function render(text) {
-  // 极简 markdown：**加粗** + 换行
-  return (text || '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>')
+  const html = marked.parse(text || '')
+  return DOMPurify.sanitize(html, { FORBID_TAGS: ['style', 'script', 'iframe'], FORBID_ATTR: ['onerror', 'onclick'] })
+}
+
+function toolLabel(t) {
+  const name = t.name === 'data_overview' ? '数据概览' : '查询交易'
+  const parts = [name]
+  if (t.count != null) parts.push(`${t.count} 笔`)
+  if (t.total != null) parts.push(`¥${Number(t.total).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`)
+  return parts.join(' · ')
 }
 
 async function scrollDown() {
@@ -130,6 +146,8 @@ async function scrollDown() {
 
 function quickAsk(q) { input.value = q; send() }
 
+function clearChat() { messages.value = [] }
+
 async function send() {
   const q = input.value.trim()
   if (!q || loading.value) return
@@ -138,100 +156,171 @@ async function send() {
   loading.value = true
   scrollDown()
   try {
-    const history = messages.value.slice(-7, -1).map(m => ({ role: m.role, content: m.content }))
+    const history = messages.value
+      .filter(m => !m.error)
+      .slice(-7, -1)
+      .map(m => ({ role: m.role, content: m.content }))
     const r = await api.aiChat(q, history)
     messages.value.push({ role: 'assistant', content: r.answer, tools: r.tool_calls })
   } catch (e) {
-    messages.value.push({ role: 'assistant', content: '出错了：' + (e.message || '调用失败') })
+    messages.value.push({ role: 'assistant', content: '出错了：' + (e.message || '调用失败'), error: true })
   } finally {
     loading.value = false
     scrollDown()
   }
 }
-
-function onRecFile() { /* 文件选择后由 doRecognize 处理 */ }
-
-async function doRecognize() {
-  recLoading.value = true
-  recRows.value = []
-  try {
-    let r
-    const f = recFile.value && recFile.value.files[0]
-    if (f) {
-      const fd = new FormData()
-      fd.append('file', f)
-      r = await api.aiRecognize(fd)
-    } else if (recText.value.trim()) {
-      r = await api.aiRecognizeText(recText.value, '')
-    } else {
-      ui.showError('请粘贴文字或选择文件')
-      return
-    }
-    recRows.value = r.rows || []
-    if (!recRows.value.length) ui.showError('没识别出交易记录')
-  } catch (e) {
-    ui.showError('识别失败：' + (e.message || ''))
-  } finally {
-    recLoading.value = false
-  }
-}
-
-async function doImport() {
-  recLoading.value = true
-  try {
-    const r = await api.aiRecognizeImport(recRows.value, recMember.value, 'AI识别账单')
-    ui.showSuccess(`已导入 ${r.count} 笔到账单`)
-    recRows.value = []
-    recText.value = ''
-    if (recFile.value) recFile.value.value = ''
-  } catch (e) {
-    ui.showError('导入失败：' + (e.message || ''))
-  } finally {
-    recLoading.value = false
-  }
-}
 </script>
 
 <style scoped>
-.ai-page { padding: 24px; max-width: 900px; margin: 0 auto; height: calc(100vh - var(--header-height, 0px)); display: flex; flex-direction: column; }
-.ai-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-.ai-header h2 { margin: 0; font-size: 22px; color: #1d1d1f; }
-.ai-header h2 i { color: #AF52DE; margin-right: 8px; }
-.tabs button { border: 1px solid #d2d2d7; background: #fff; padding: 7px 16px; border-radius: 18px; margin-left: 8px; cursor: pointer; font-size: 14px; }
-.tabs button.active { background: #007AFF; color: #fff; border-color: #007AFF; }
-.ai-disabled { text-align: center; color: #86868b; margin-top: 80px; }
-.ai-disabled i { font-size: 40px; }
+.ai-page {
+  padding: 24px;
+  max-width: 920px;
+  margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
 
-.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; background: #fff; border-radius: 14px; border: 1px solid #eee; overflow: hidden; }
-.messages { flex: 1; overflow-y: auto; padding: 18px; }
-.hint { color: #86868b; }
-.examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.examples span { background: #f0f2f5; border-radius: 16px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
-.examples span:hover { background: #e2e8f0; }
-.msg { display: flex; margin-bottom: 14px; }
-.msg.user { justify-content: flex-end; }
-.bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
-.msg.user .bubble { background: #007AFF; color: #fff; border-bottom-right-radius: 4px; }
-.msg.assistant .bubble { background: #f0f2f5; color: #1d1d1f; border-bottom-left-radius: 4px; }
-.typing { color: #86868b; }
-.tools { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
-.tool-chip { font-size: 11px; color: #6e6e73; background: rgba(0,0,0,.05); border-radius: 10px; padding: 2px 8px; }
-.composer { display: flex; gap: 10px; padding: 12px; border-top: 1px solid #eee; }
-.composer input { flex: 1; height: 42px; border: 1px solid #d2d2d7; border-radius: 21px; padding: 0 18px; font-size: 14px; outline: none; }
-.composer input:focus { border-color: #007AFF; }
-.composer button { height: 42px; padding: 0 22px; border: none; border-radius: 21px; background: #007AFF; color: #fff; cursor: pointer; }
-.composer button:disabled { opacity: .5; cursor: not-allowed; }
+/* ===== 头部 ===== */
+.ai-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+.ai-title { display: flex; align-items: center; gap: 12px; }
+.ai-logo-badge {
+  width: 46px; height: 46px; border-radius: 14px;
+  background: linear-gradient(135deg, #e8f1ff 0%, #f3e8ff 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.12);
+}
+.ai-logo-badge img { width: 38px; height: 38px; object-fit: contain; }
+.ai-title h2 { margin: 0; font-size: 20px; color: #1d1d1f; letter-spacing: -0.02em; }
+.ai-sub { margin: 2px 0 0; font-size: 12px; color: #86868b; display: flex; align-items: center; gap: 6px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #d2d2d7; display: inline-block; }
+.status-dot.on { background: #34C759; box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.18); }
+.ai-actions { display: flex; gap: 8px; }
+.ghost-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid #e5e5ea; background: #fff; color: #6e6e73;
+  padding: 7px 14px; border-radius: 18px; font-size: 13px; cursor: pointer; text-decoration: none;
+  transition: all .15s;
+}
+.ghost-btn:hover { border-color: #007AFF; color: #007AFF; }
 
-.recognize { background: #fff; border-radius: 14px; border: 1px solid #eee; padding: 20px; overflow-y: auto; }
-.recognize .desc { color: #6e6e73; font-size: 13px; }
-.rec-input textarea { width: 100%; min-height: 140px; border: 1px solid #d2d2d7; border-radius: 10px; padding: 12px; font-size: 13px; resize: vertical; }
-.rec-actions { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
-.rec-actions button { padding: 8px 18px; border: none; border-radius: 10px; background: #007AFF; color: #fff; cursor: pointer; }
-.rec-result { margin-top: 20px; }
-.rec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.rec-head select { height: 34px; border-radius: 8px; border: 1px solid #d2d2d7; padding: 0 10px; }
-.import-btn { padding: 7px 16px; border: none; border-radius: 8px; background: #34C759; color: #fff; cursor: pointer; }
-.rec-result table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.rec-result th, .rec-result td { border-bottom: 1px solid #f0f0f0; padding: 7px 8px; text-align: left; }
-.rec-result .amt { text-align: right; font-variant-numeric: tabular-nums; }
+/* ===== 卡片 ===== */
+.card { background: #fff; border: 1px solid #ebebf0; border-radius: 18px; box-shadow: 0 2px 12px rgba(0,0,0,.04); }
+
+/* ===== 未配置 ===== */
+.ai-empty { text-align: center; padding: 60px 24px; }
+.empty-logo { width: 72px; height: 72px; opacity: .9; }
+.ai-empty h3 { margin: 14px 0 6px; color: #1d1d1f; }
+.ai-empty p { color: #86868b; font-size: 14px; margin: 0 0 20px; }
+.primary-btn {
+  display: inline-block; background: #007AFF; color: #fff; text-decoration: none;
+  padding: 10px 26px; border-radius: 12px; font-size: 14px;
+}
+
+/* ===== 对话 ===== */
+.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.messages { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* 欢迎态 */
+.welcome { text-align: center; padding: 40px 12px 20px; }
+.welcome-logo { width: 84px; height: 84px; }
+.welcome h3 { margin: 12px 0 4px; font-size: 20px; color: #1d1d1f; }
+.welcome p { color: #86868b; font-size: 13px; margin: 0 0 24px; }
+.suggest-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px; max-width: 560px; margin: 0 auto;
+}
+.suggest-card {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: #f7f8fa; border: 1px solid transparent; border-radius: 14px;
+  padding: 14px 16px; font-size: 13px; color: #3a3a3c; cursor: pointer;
+  transition: all .15s;
+}
+.suggest-card:hover { background: #eef5ff; border-color: #b9d8ff; color: #007AFF; transform: translateY(-1px); }
+.suggest-card i { color: #007AFF; font-size: 15px; width: 18px; }
+
+/* 消息行 */
+.msg-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.msg-row.user { flex-direction: row-reverse; }
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  margin-top: 2px;
+}
+.avatar.assistant { background: linear-gradient(135deg, #eaf3ff, #f3ebff); border: 1px solid #e8eef8; }
+.avatar.assistant img { width: 26px; height: 26px; object-fit: contain; }
+.avatar.user { background: linear-gradient(135deg, #007AFF, #4DA3FF); color: #fff; font-size: 13px; }
+.msg-body { max-width: 78%; min-width: 0; display: flex; flex-direction: column; }
+.msg-row.user .msg-body { align-items: flex-end; }
+
+.bubble { padding: 11px 15px; border-radius: 16px; font-size: 14px; line-height: 1.7; word-break: break-word; }
+.bubble.user {
+  background: linear-gradient(135deg, #007AFF, #2E8FFF);
+  color: #fff; border-top-right-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.22);
+}
+.bubble.assistant { background: #f6f7f9; color: #1d1d1f; border-top-left-radius: 6px; }
+.bubble.error { background: #fff2f1; color: #c0392b; border: 1px solid #ffd9d5; }
+
+/* 打字中 */
+.typing { display: inline-flex; gap: 5px; padding: 14px 16px; }
+.typing .dot { width: 7px; height: 7px; background: #b9c0c9; border-radius: 50%; animation: blink 1.2s infinite ease-in-out; }
+.typing .dot:nth-child(2) { animation-delay: .18s; }
+.typing .dot:nth-child(3) { animation-delay: .36s; }
+@keyframes blink { 0%, 70%, 100% { opacity: .3; transform: translateY(0); } 35% { opacity: 1; transform: translateY(-3px); } }
+
+/* 工具痕迹 */
+.tools { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: #6e6e73; background: #fff;
+  border: 1px solid #ebebf0; border-radius: 12px; padding: 3px 10px;
+}
+.tool-chip i { color: #AF52DE; font-size: 10px; }
+
+/* ===== Markdown 渲染 ===== */
+.md :deep(p) { margin: 0 0 8px; }
+.md :deep(p:last-child) { margin-bottom: 0; }
+.md :deep(strong) { color: #0a59c9; font-weight: 600; }
+.md :deep(ul), .md :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
+.md :deep(li) { margin: 3px 0; }
+.md :deep(code) { background: #eef0f3; border-radius: 5px; padding: 1px 6px; font-size: 12.5px; }
+.md :deep(h1), .md :deep(h2), .md :deep(h3), .md :deep(h4) { margin: 10px 0 6px; font-size: 15px; }
+.md :deep(table) {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  margin: 10px 0; font-size: 13px; background: #fff;
+  border: 1px solid #e8e8ed; border-radius: 10px; overflow: hidden;
+}
+.md :deep(th) {
+  background: #f0f4fa; color: #3a3a3c; font-weight: 600;
+  padding: 8px 12px; text-align: left; border-bottom: 1px solid #e8e8ed;
+}
+.md :deep(td) { padding: 7px 12px; border-bottom: 1px solid #f2f2f5; font-variant-numeric: tabular-nums; }
+.md :deep(tr:last-child td) { border-bottom: none; }
+.md :deep(tr:nth-child(even) td) { background: #fafbfc; }
+.md :deep(blockquote) { margin: 6px 0; padding: 6px 12px; border-left: 3px solid #cfe1ff; color: #6e6e73; background: #f8faff; border-radius: 0 8px 8px 0; }
+.md :deep(hr) { border: none; border-top: 1px solid #ebebf0; margin: 10px 0; }
+
+/* ===== 输入区 ===== */
+.composer {
+  display: flex; gap: 10px; padding: 14px 16px;
+  border-top: 1px solid #f0f0f3; background: #fcfcfd;
+}
+.composer input {
+  flex: 1; height: 46px; border: 1px solid #e2e2e8; border-radius: 23px;
+  padding: 0 20px; font-size: 14px; outline: none; background: #fff;
+  transition: all .15s;
+}
+.composer input:focus { border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.10); }
+.send-btn {
+  width: 46px; height: 46px; border: none; border-radius: 50%;
+  background: linear-gradient(135deg, #007AFF, #2E8FFF); color: #fff;
+  font-size: 16px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 122, 255, 0.3);
+  transition: all .15s;
+}
+.send-btn:hover:not(:disabled) { transform: scale(1.05); }
+.send-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 </style>

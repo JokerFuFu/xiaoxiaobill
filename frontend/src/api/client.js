@@ -148,7 +148,10 @@ export const api = {
   aiChat: (question, history) => post('/ai/chat', { question, history }),
   aiRecognize: (formData) => post('/ai/recognize', formData),
   aiRecognizeText: (text, hint) => post('/ai/recognize', { text, hint }),
-  aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name })
+  aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name }),
+  aiGetConfig: () => get('/ai/config'),
+  aiSaveConfig: (payload) => post('/ai/config', payload),
+  aiTestConfig: (payload) => post('/ai/config/test', payload || {})
 }
 
 // 401 未登录 → 跳登录页(登录页本身不跳,避免循环)

@@ -7,22 +7,109 @@ AI 服务:调用 Anthropic 兼容端点(默认 Kimi)。
 """
 import json
 import logging
+import os
 import re
+import threading
 
 import pandas as pd
 import requests
 
-from config import AI_BASE_URL, AI_API_KEY, AI_MODEL
+from config import AI_BASE_URL, AI_API_KEY, AI_MODEL, UPLOAD_FOLDER
 
 logger = logging.getLogger(__name__)
+_cfg_lock = threading.RLock()
 
 VALID_TYPES = ['收入', '支出', '转入', '转出', '不计收支']
 
 
-def _post_messages(payload, timeout=120):
-    url = AI_BASE_URL + '/v1/messages'
+# ============ 每用户模型配置(存 upload/<uid>/_ai_config.json,回落 env 默认) ============
+def _cfg_file(uid):
+    return os.path.join(UPLOAD_FOLDER, uid, '_ai_config.json')
+
+
+def get_ai_config(uid):
+    """返回该用户生效的 AI 配置 {base_url, api_key, model, source}。
+    用户自定义优先;否则用环境变量默认(Kimi)。"""
+    custom = {}
+    try:
+        p = _cfg_file(uid)
+        if os.path.exists(p):
+            with open(p, encoding='utf-8') as f:
+                custom = json.load(f) or {}
+    except Exception:
+        custom = {}
+    if custom.get('api_key'):
+        return {
+            'base_url': (custom.get('base_url') or AI_BASE_URL).rstrip('/'),
+            'api_key': custom['api_key'],
+            'model': custom.get('model') or AI_MODEL,
+            'source': 'custom',
+        }
+    return {'base_url': AI_BASE_URL, 'api_key': AI_API_KEY, 'model': AI_MODEL, 'source': 'default'}
+
+
+def save_ai_config(uid, base_url=None, api_key=None, model=None):
+    """保存用户自定义配置;api_key 为 None 表示保留旧 key,空串表示清除自定义(回落默认)。"""
+    with _cfg_lock:
+        p = _cfg_file(uid)
+        old = {}
+        if os.path.exists(p):
+            try:
+                with open(p, encoding='utf-8') as f:
+                    old = json.load(f) or {}
+            except Exception:
+                old = {}
+        if api_key == '':
+            # 清除自定义配置 → 回落默认
+            if os.path.exists(p):
+                os.remove(p)
+            return get_ai_config(uid)
+        new = {
+            'base_url': (base_url if base_url is not None else old.get('base_url', '')).strip(),
+            'api_key': api_key if api_key is not None else old.get('api_key', ''),
+            'model': (model if model is not None else old.get('model', '')).strip(),
+        }
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(new, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, p)
+        try:
+            os.chmod(p, 0o600)   # 含 key,仅属主可读
+        except Exception:
+            pass
+        return get_ai_config(uid)
+
+
+def mask_key(k):
+    if not k:
+        return ''
+    return k[:7] + '…' + k[-4:] if len(k) > 14 else k[:3] + '…'
+
+
+def test_ai_config(cfg):
+    """对给定配置发一次最小请求,返回 (ok, message)。"""
+    try:
+        resp = _post_messages({'model': cfg['model'], 'max_tokens': 16,
+                               'messages': [{'role': 'user', 'content': 'ping,只回复ok'}]},
+                              cfg=cfg, timeout=30)
+        txt = ''.join(c.get('text', '') for c in resp.get('content', []) if c.get('type') == 'text')
+        return True, f"连接成功(模型 {resp.get('model', cfg['model'])} 回复: {txt[:40]})"
+    except requests.exceptions.HTTPError as e:
+        code = e.response.status_code if e.response is not None else '?'
+        hint = {401: 'API Key 无效', 403: '无权限', 404: '端点路径不对(需 Anthropic 兼容 /v1/messages)'}.get(code, '')
+        return False, f"HTTP {code} {hint}".strip()
+    except Exception as e:
+        return False, f"连接失败: {e}"
+
+
+def _post_messages(payload, cfg=None, timeout=120):
+    base = (cfg or {}).get('base_url') or AI_BASE_URL
+    key = (cfg or {}).get('api_key') or AI_API_KEY
+    url = base.rstrip('/') + '/v1/messages'
     headers = {
-        'x-api-key': AI_API_KEY,
+        'x-api-key': key,
+        'authorization': f'Bearer {key}',   # 兼容只认 Bearer 的网关
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
     }
@@ -130,14 +217,15 @@ def _run_overview(df):
     return out
 
 
-def chat_over_transactions(df, question, history=None):
+def chat_over_transactions(df, question, history=None, cfg=None):
     """对话式检索。history: [{'role','content'}]。返回 {answer, tool_calls}。"""
     today = pd.Timestamp.now().strftime('%Y-%m-%d')
     system = (
         f"你是个人账单分析助手。今天是 {today}。用户的全部交易通过工具查询,你不能编造数字——"
         f"任何涉及金额/笔数/明细的回答都必须先调用工具拿到真实数据再回答。\n"
         f"字段说明:『收/支』取值 收入/支出/转入/转出/不计收支(转入转出=转账,不计收支=内部搬运/理财申赎,真实花费只看『支出』)。"
-        f"金额单位元。回答用中文,简洁,给出关键数字和必要的对比/明细,不要罗列原始 JSON。"
+        f"金额单位元。回答用中文,简洁。多条明细用 Markdown 表格输出(时间/商户/金额列),"
+        f"重点数字加粗,不要罗列原始 JSON。数据有「成员」维度时可按成员对比。"
     )
     messages = []
     for h in (history or [])[-6:]:
@@ -148,9 +236,9 @@ def chat_over_transactions(df, question, history=None):
     tool_calls = []
     for _ in range(6):
         resp = _post_messages({
-            'model': AI_MODEL, 'max_tokens': 1500, 'system': system,
+            'model': (cfg or {}).get('model') or AI_MODEL, 'max_tokens': 1500, 'system': system,
             'messages': messages, 'tools': [_QUERY_TOOL, _OVERVIEW_TOOL],
-        })
+        }, cfg=cfg)
         content = resp.get('content', [])
         messages.append({'role': 'assistant', 'content': content})
         tool_uses = [c for c in content if c.get('type') == 'tool_use']
@@ -187,7 +275,7 @@ def _extract_json_array(text):
         return []
 
 
-def recognize_bill(text_content, hint=''):
+def recognize_bill(text_content, hint='', cfg=None):
     """把任意原始账单文本解析为本系统 schema 的交易数组(供预览)。返回 list[dict]。"""
     text_content = (text_content or '')[:18000]
     system = (
@@ -199,9 +287,9 @@ def recognize_bill(text_content, hint=''):
     )
     prompt = (f"账单来源提示:{hint}\n\n原始内容:\n{text_content}" if hint else f"原始内容:\n{text_content}")
     resp = _post_messages({
-        'model': AI_MODEL, 'max_tokens': 4000, 'system': system,
+        'model': (cfg or {}).get('model') or AI_MODEL, 'max_tokens': 4000, 'system': system,
         'messages': [{'role': 'user', 'content': prompt}],
-    })
+    }, cfg=cfg)
     text = ''.join(c.get('text', '') for c in resp.get('content', []) if c.get('type') == 'text')
     rows = _extract_json_array(text)
     norm = []

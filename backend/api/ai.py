@@ -14,7 +14,7 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from config import AI_ENABLED, AI_MODEL
+from config import AI_ENABLED, AI_MODEL, AI_BASE_URL
 from utils.session import get_session_dir, get_current_uid
 from services.data_loader import load_alipay_data
 from services import ai as ai_svc
@@ -24,15 +24,75 @@ logger = logging.getLogger(__name__)
 ai_bp = Blueprint('ai', __name__)
 
 
+def _uid():
+    return get_current_uid() or '__anon__'
+
+
+def _cfg():
+    """当前用户生效的 AI 配置(自定义优先,回落 env 默认)。"""
+    return ai_svc.get_ai_config(_uid())
+
+
 @ai_bp.route('/api/ai/status')
 def ai_status():
-    return jsonify({'success': True, 'enabled': AI_ENABLED, 'model': AI_MODEL if AI_ENABLED else None})
+    cfg = _cfg()
+    enabled = bool(cfg.get('api_key'))
+    return jsonify({'success': True, 'enabled': enabled,
+                    'model': cfg['model'] if enabled else None,
+                    'source': cfg['source']})
 
 
 def _require_ai():
-    if not AI_ENABLED:
-        return jsonify({'success': False, 'error': 'AI 未配置(缺少 ANTHROPIC_API_KEY)'}), 503
+    if not _cfg().get('api_key'):
+        return jsonify({'success': False, 'error': 'AI 未配置,请到「设置 → AI 模型配置」填入 API Key'}), 503
     return None
+
+
+# ============ 每用户模型配置 ============
+@ai_bp.route('/api/ai/config', methods=['GET'])
+def get_config():
+    cfg = ai_svc.get_ai_config(_uid())
+    return jsonify({'success': True, 'config': {
+        'base_url': cfg['base_url'],
+        'model': cfg['model'],
+        'api_key_masked': ai_svc.mask_key(cfg['api_key']),
+        'has_key': bool(cfg['api_key']),
+        'source': cfg['source'],   # custom=用户自定义 / default=系统默认
+        'default_base_url': AI_BASE_URL,
+        'default_model': AI_MODEL,
+        'has_default': AI_ENABLED,
+    }})
+
+
+@ai_bp.route('/api/ai/config', methods=['POST'])
+def save_config():
+    data = request.get_json(silent=True) or {}
+    base_url = (data.get('base_url') or '').strip()
+    model = (data.get('model') or '').strip()
+    api_key = data.get('api_key')   # None=不改 / ''=清除自定义回落默认 / 其他=新key
+    if api_key is not None:
+        api_key = api_key.strip()
+    if api_key and (base_url and not base_url.startswith(('http://', 'https://'))):
+        return jsonify({'success': False, 'error': 'Base URL 需以 http(s):// 开头'}), 400
+    cfg = ai_svc.save_ai_config(_uid(), base_url=base_url or None, api_key=api_key, model=model or None)
+    return jsonify({'success': True, 'source': cfg['source'],
+                    'api_key_masked': ai_svc.mask_key(cfg['api_key'])})
+
+
+@ai_bp.route('/api/ai/config/test', methods=['POST'])
+def test_config():
+    """测试连接:body 可带 base_url/api_key/model 直接试,缺省用已保存配置。"""
+    data = request.get_json(silent=True) or {}
+    cfg = ai_svc.get_ai_config(_uid())
+    test = {
+        'base_url': (data.get('base_url') or cfg['base_url']).strip().rstrip('/'),
+        'api_key': (data.get('api_key') or '').strip() or cfg['api_key'],
+        'model': (data.get('model') or cfg['model']).strip(),
+    }
+    if not test['api_key']:
+        return jsonify({'success': False, 'error': '没有可用的 API Key'}), 400
+    ok, msg = ai_svc.test_ai_config(test)
+    return jsonify({'success': True, 'ok': ok, 'message': msg})
 
 
 @ai_bp.route('/api/ai/chat', methods=['POST'])
@@ -49,7 +109,7 @@ def chat():
     except FileNotFoundError:
         return jsonify({'success': False, 'error': '当前账号还没有账单数据,请先上传'}), 400
     try:
-        result = ai_svc.chat_over_transactions(df, question, data.get('history'))
+        result = ai_svc.chat_over_transactions(df, question, data.get('history'), cfg=_cfg())
     except Exception as e:
         logger.exception("AI chat 失败")
         return jsonify({'success': False, 'error': f'AI 调用失败: {e}'}), 500
@@ -100,7 +160,7 @@ def recognize():
             hint = hint or data.get('hint', '')
         if not (text or '').strip():
             return jsonify({'success': False, 'error': '没有可识别的内容'}), 400
-        rows = ai_svc.recognize_bill(text, hint)
+        rows = ai_svc.recognize_bill(text, hint, cfg=_cfg())
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
@@ -121,7 +181,7 @@ def recognize_import():
     rows = data.get('rows') or []
     if not rows:
         return jsonify({'success': False, 'error': '没有要导入的记录'}), 400
-    uid = get_current_uid() or '__anon__'
+    uid = _uid()
     member_id = data.get('member_id') or member_svc.default_member_id(uid)
     name = (data.get('name') or 'AI识别账单').strip()
 
