@@ -21,9 +21,6 @@
         <button class="ghost-btn" @click="newChat" title="开启新对话">
           <i class="fas fa-plus"></i> 新对话
         </button>
-        <button v-if="messages.length" class="ghost-btn" :class="{ on: selectMode }" @click="enterSelect" title="选择消息后复制/生成图片/生成文档">
-          <i class="fas fa-share-from-square"></i> 分享
-        </button>
         <router-link to="/settings" class="ghost-btn" title="模型配置">
           <i class="fas fa-sliders-h"></i> 模型配置
         </router-link>
@@ -110,10 +107,13 @@
                   {{ toolLabel(t) }}
                 </span>
               </div>
-              <!-- 消息操作:复制 / 重新生成(末条) -->
+              <!-- 消息操作:复制 / 分享 / 重新生成(末条) -->
               <div v-if="m.role === 'assistant' && !m.info" class="msg-actions">
-                <button class="act-btn" @click="copyMsg(m)" title="复制回答"><i class="fas fa-copy"></i></button>
-                <button v-if="i === messages.length - 1 && !loading" class="act-btn" @click="regenerate" title="重新生成">
+                <button class="act-btn" @click.stop="copyMsg(m)" title="复制回答"><i class="fas fa-copy"></i></button>
+                <button class="act-btn" @click.stop="shareFrom(i)" title="分享(选择后复制/生成图片/生成文档)">
+                  <i class="fas fa-share-from-square"></i>
+                </button>
+                <button v-if="i === messages.length - 1 && !loading" class="act-btn" @click.stop="regenerate" title="重新生成">
                   <i class="fas fa-rotate-right"></i>
                 </button>
               </div>
@@ -173,6 +173,29 @@
         </div>
       </div>
     </div>
+
+    <!-- 分享图片预览(Kimi 风格) -->
+    <teleport to="body">
+      <div v-if="imgPreview" class="img-modal-mask" @click.self="closePreview">
+        <div class="img-modal">
+          <div class="img-modal-head">
+            <span>分享图片预览</span>
+            <button class="img-close" @click="closePreview"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="img-modal-body">
+            <img :src="imgPreview" alt="分享图片" />
+          </div>
+          <div class="img-modal-foot">
+            <button class="dark-btn" @click="copyImg" :disabled="imgCopying">
+              <i class="fas fa-copy"></i> {{ imgCopying ? '复制中…' : '复制图片' }}
+            </button>
+            <button class="dark-btn" @click="downloadImg">
+              <i class="fas fa-download"></i> 下载图片
+            </button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -427,6 +450,13 @@ function enterSelect() {
   selected.value = new Set(messages.value.map((m, i) => i))   // 默认全选
 }
 
+// 从某条回答进入分享(预选该条,Kimi 交互)
+function shareFrom(i) {
+  if (loading.value) return
+  selectMode.value = true
+  selected.value = new Set([i])
+}
+
 function exitSelect() {
   selectMode.value = false
   selected.value = new Set()
@@ -513,19 +543,72 @@ async function imgSelected() {
     document.body.appendChild(wrap)
     const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#f5f7fa', logging: false })
     document.body.removeChild(wrap)
-    canvas.toBlob((b) => {
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(b)
-      a.download = `小遥对话-${title.slice(0, 12)}.png`
-      a.click()
-      URL.revokeObjectURL(a.href)
-    }, 'image/png')
-    ui.showSuccess('图片已生成')
+    // 进入预览弹窗(复制图片/下载图片)
+    imgTitle.value = title
+    imgPreview.value = canvas.toDataURL('image/png')
+    imgBlob.value = await new Promise((res) => canvas.toBlob(res, 'image/png'))
     exitSelect()
   } catch (e) {
     ui.showError('生成图片失败: ' + (e.message || ''))
   } finally {
     imgBusy.value = false
+  }
+}
+
+// ===== 图片预览弹窗:复制图片 / 下载图片 =====
+const imgPreview = ref('')     // dataURL
+const imgBlob = ref(null)
+const imgTitle = ref('对话')
+const imgCopying = ref(false)
+
+function closePreview() {
+  imgPreview.value = ''
+  imgBlob.value = null
+}
+
+function downloadImg() {
+  const a = document.createElement('a')
+  a.href = imgPreview.value
+  a.download = `小遥对话-${imgTitle.value.slice(0, 12)}.png`
+  a.click()
+  ui.showSuccess('图片已下载')
+}
+
+async function copyImg() {
+  imgCopying.value = true
+  try {
+    // 首选标准剪贴板 API(需安全上下文)
+    if (navigator.clipboard && window.ClipboardItem && imgBlob.value) {
+      await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': imgBlob.value })])
+      ui.showSuccess('图片已复制,可直接粘贴')
+      return
+    }
+    throw new Error('no-clipboard-api')
+  } catch (e) {
+    // http 局域网无安全上下文 → contenteditable 选中图片复制(Chrome 可用)
+    try {
+      const holder = document.createElement('div')
+      holder.contentEditable = 'true'
+      holder.style.cssText = 'position:fixed;left:-9999px;top:0'
+      const img = document.createElement('img')
+      img.src = imgPreview.value
+      holder.appendChild(img)
+      document.body.appendChild(holder)
+      const range = document.createRange()
+      range.selectNodeContents(holder)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      const ok = document.execCommand('copy')
+      sel.removeAllRanges()
+      document.body.removeChild(holder)
+      if (ok) ui.showSuccess('图片已复制,可直接粘贴')
+      else throw new Error('execCommand failed')
+    } catch (e2) {
+      ui.showError('当前浏览器环境不支持复制图片,请用「下载图片」')
+    }
+  } finally {
+    imgCopying.value = false
   }
 }
 
@@ -763,6 +846,40 @@ async function renameChat(c) {
 .sel-act:disabled { color: #b3b8bf; cursor: not-allowed; }
 .sel-cancel { border: none; background: none; color: #6e6e73; font-size: 14px; cursor: pointer; }
 .sel-cancel:hover { color: #1d1d1f; }
+
+/* ===== 分享图片预览弹窗 ===== */
+.img-modal-mask {
+  position: fixed; inset: 0; z-index: 3000;
+  background: rgba(0, 0, 0, 0.48);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.img-modal {
+  background: #fff; border-radius: 18px; width: 600px; max-width: 94vw;
+  max-height: 88vh; display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+}
+.img-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; font-size: 15px; font-weight: 600; color: #1d1d1f;
+}
+.img-close { border: none; background: none; color: #86868b; font-size: 17px; cursor: pointer; padding: 4px; }
+.img-close:hover { color: #1d1d1f; }
+.img-modal-body {
+  flex: 1; overflow-y: auto; padding: 0 20px;
+  background: #fff;
+}
+.img-modal-body img {
+  width: 100%; display: block; border-radius: 12px;
+  border: 1px solid #ebebf0;
+}
+.img-modal-foot { display: flex; justify-content: center; gap: 14px; padding: 16px 20px 20px; }
+.dark-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #1d1d1f; color: #fff; border: none; border-radius: 12px;
+  padding: 11px 22px; font-size: 14px; cursor: pointer; transition: all .15s;
+}
+.dark-btn:hover:not(:disabled) { background: #3a3a3c; }
+.dark-btn:disabled { opacity: .6; cursor: not-allowed; }
 
 /* 消息操作条 */
 .msg-actions { margin-top: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
