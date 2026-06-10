@@ -12,6 +12,7 @@
     "dompurify": "^3.4.8",
     "echarts": "^5.4.3",
     "echarts-wordcloud": "^2.1.0",
+    "html2canvas": "^1.4.1",
     "marked": "^18.0.5",
     "pinia": "^2.1.0",
     "vue": "^3.4.0",

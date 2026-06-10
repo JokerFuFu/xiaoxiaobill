@@ -21,11 +21,8 @@
         <button class="ghost-btn" @click="newChat" title="开启新对话">
           <i class="fas fa-plus"></i> 新对话
         </button>
-        <button v-if="messages.length" class="ghost-btn" @click="copyChat" title="复制整段对话">
-          <i class="fas fa-copy"></i> 复制
-        </button>
-        <button v-if="messages.length" class="ghost-btn" @click="exportChat" title="导出为 Markdown 文件">
-          <i class="fas fa-file-arrow-down"></i> 导出
+        <button v-if="messages.length" class="ghost-btn" :class="{ on: selectMode }" @click="enterSelect" title="选择消息后复制/生成图片/生成文档">
+          <i class="fas fa-share-from-square"></i> 分享
         </button>
         <router-link to="/settings" class="ghost-btn" title="模型配置">
           <i class="fas fa-sliders-h"></i> 模型配置
@@ -85,7 +82,14 @@
           </div>
 
           <!-- 消息流 -->
-          <div v-for="(m, i) in messages" :key="i" :class="['msg-row', m.role]">
+          <div
+            v-for="(m, i) in messages" :key="i"
+            :class="['msg-row', m.role, { selectable: selectMode, selected: selectMode && selected.has(i) }]"
+            @click="selectMode && toggleSel(i)"
+          >
+            <div v-if="selectMode" class="sel-dot" :class="{ on: selected.has(i) }">
+              <i v-if="selected.has(i)" class="fas fa-check"></i>
+            </div>
             <div class="avatar" :class="m.role">
               <img v-if="m.role === 'assistant'" src="/images/logo_128.png" alt="AI" />
               <i v-else class="fas fa-user"></i>
@@ -127,8 +131,30 @@
           </div>
         </div>
 
+        <!-- 选择模式底部操作栏(Kimi 风格) -->
+        <div v-if="selectMode" class="select-bar">
+          <button class="sel-all" @click="toggleAll">
+            <span class="sel-dot small" :class="{ on: allSelected }">
+              <i v-if="allSelected" class="fas fa-check"></i>
+            </span>
+            全选
+          </button>
+          <div class="sel-actions">
+            <button class="sel-act" :disabled="!selected.size" @click="copySelected">
+              <i class="fas fa-copy"></i> 复制文本
+            </button>
+            <button class="sel-act" :disabled="!selected.size || imgBusy" @click="imgSelected">
+              <i class="fas fa-image"></i> {{ imgBusy ? '生成中…' : '生成图片' }}
+            </button>
+            <button class="sel-act" :disabled="!selected.size" @click="docSelected">
+              <i class="fas fa-file-lines"></i> 生成文档
+            </button>
+          </div>
+          <button class="sel-cancel" @click="exitSelect">取消</button>
+        </div>
+
         <!-- 输入区 -->
-        <div class="composer">
+        <div v-else class="composer">
           <textarea
             ref="inputBox"
             v-model="input"
@@ -151,7 +177,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import api from '@/api/client'
@@ -261,6 +287,7 @@ function newChat() {
   chatId.value = null
   messages.value = []
   showHistory.value = false
+  exitSelect()
 }
 
 async function loadChat(id) {
@@ -269,6 +296,7 @@ async function loadChat(id) {
     chatId.value = id
     messages.value = (r.chat.messages || []).map(m => ({ role: m.role, content: m.content, tools: m.tools }))
     showHistory.value = false
+    exitSelect()
     scrollDown()
   } catch (e) { /* ignore */ }
 }
@@ -358,28 +386,147 @@ async function copyText(text, tip) {
   }
 }
 
-function copyMsg(m) { copyText(m.content, '回答已复制') }
+// 图表块 → 可读 Markdown 表格(复制/生成文档时使用,避免输出原始 chart JSON)
+function chartSpecToMarkdown(spec) {
+  const title = spec.title ? `**【图表】${spec.title}**` : '**【图表】**'
+  try {
+    if (spec.type === 'pie') {
+      const rows = (spec.data || []).map(d => `| ${d.name} | ${d.value} |`)
+      return [title, '', '| 名称 | 数值 |', '|---|---:|', ...rows].join('\n')
+    }
+    const series = spec.series || []
+    const head = `| 类别 | ${series.map(s => s.name || '数值').join(' | ')} |`
+    const sep = `|---|${series.map(() => '---:').join('|')}|`
+    const rows = (spec.categories || []).map((c, idx) =>
+      `| ${c} | ${series.map(s => (s.data || [])[idx] ?? '').join(' | ')} |`)
+    return [title, '', head, sep, ...rows].join('\n')
+  } catch (e) {
+    return title
+  }
+}
 
-function chatToMarkdown() {
+// 消息内容序列化:chart 代码块替换为表格,其余原样保留(长文本完整)
+function serializeContent(content) {
+  return (content || '').replace(/```chart\s*\n?([\s\S]*?)```/g, (full, json) => {
+    try { return chartSpecToMarkdown(JSON.parse(json)) } catch (e) { return '【图表】' }
+  })
+}
+
+function copyMsg(m) { copyText(serializeContent(m.content), '回答已复制') }
+
+// ===== 选择模式(Kimi 风格:全选/复制文本/生成图片/生成文档/取消) =====
+const selectMode = ref(false)
+const selected = ref(new Set())
+const imgBusy = ref(false)
+
+const allSelected = computed(() => selected.value.size === messages.value.length && messages.value.length > 0)
+
+function enterSelect() {
+  if (loading.value) return
+  selectMode.value = true
+  selected.value = new Set(messages.value.map((m, i) => i))   // 默认全选
+}
+
+function exitSelect() {
+  selectMode.value = false
+  selected.value = new Set()
+}
+
+function toggleSel(i) {
+  const s = new Set(selected.value)
+  s.has(i) ? s.delete(i) : s.add(i)
+  selected.value = s
+}
+
+function toggleAll() {
+  selected.value = allSelected.value ? new Set() : new Set(messages.value.map((m, i) => i))
+}
+
+function selectedList() {
+  return [...selected.value].sort((a, b) => a - b)
+    .map(i => messages.value[i]).filter(m => m && !m.info)
+}
+
+function selectionToMarkdown() {
   const title = (chats.value.find(c => c.id === chatId.value)?.title) || '对话'
-  const lines = [`# ${title}`, '', `> 导出自 小遥账单 AI 助手 · ${new Date().toLocaleString('zh-CN')}`, '']
-  for (const m of messages.value) {
-    if (m.info) continue
-    lines.push(m.role === 'user' ? '## 🙋 我' : '## 🤖 小遥', '', m.content, '')
+  const lines = [`# ${title}`, '', `> 来自 小遥账单 AI 助手 · ${new Date().toLocaleString('zh-CN')}`, '']
+  for (const m of selectedList()) {
+    lines.push(m.role === 'user' ? '## 🙋 我' : '## 🤖 小遥', '', serializeContent(m.content), '')
   }
   return lines.join('\n')
 }
 
-function copyChat() { copyText(chatToMarkdown(), '整段对话已复制') }
+function copySelected() {
+  copyText(selectionToMarkdown(), `已复制 ${selectedList().length} 条消息`)
+  exitSelect()
+}
 
-function exportChat() {
+function docSelected() {
   const title = (chats.value.find(c => c.id === chatId.value)?.title) || '对话'
-  const blob = new Blob([chatToMarkdown()], { type: 'text/markdown;charset=utf-8' })
+  const blob = new Blob([selectionToMarkdown()], { type: 'text/markdown;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = `小遥对话-${title.slice(0, 16)}.md`
   a.click()
   URL.revokeObjectURL(a.href)
+  exitSelect()
+}
+
+async function imgSelected() {
+  imgBusy.value = true
+  try {
+    const { default: html2canvas } = await import('html2canvas')
+    const idxs = [...selected.value].sort((a, b) => a - b)
+    const rows = [...msgBox.value.querySelectorAll('.msg-row')]
+    const wrap = document.createElement('div')
+    wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:680px;background:#f5f7fa;padding:26px 24px;font-family:-apple-system,"PingFang SC",sans-serif;box-sizing:border-box'
+    const title = (chats.value.find(c => c.id === chatId.value)?.title) || 'AI 对话'
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+        <img src="/images/logo_128.png" style="width:42px;height:42px;object-fit:contain"/>
+        <div>
+          <div style="font-size:16px;font-weight:600;color:#1d1d1f">小遥账单 · ${title}</div>
+          <div style="font-size:11.5px;color:#86868b">${new Date().toLocaleString('zh-CN')}</div>
+        </div>
+      </div>`
+    for (const i of idxs) {
+      const src = rows[i]
+      if (!src) continue
+      const c = src.cloneNode(true)
+      c.querySelectorAll('.msg-actions, .sel-dot, .tools').forEach(e => e.remove())
+      // canvas 内容不会随 cloneNode 复制,手动重绘(图表入图的关键)
+      const srcCv = src.querySelectorAll('canvas')
+      const dstCv = c.querySelectorAll('canvas')
+      srcCv.forEach((cv, k) => {
+        const t = dstCv[k]
+        if (t) {
+          t.width = cv.width; t.height = cv.height
+          t.style.width = cv.style.width; t.style.height = cv.style.height
+          try { t.getContext('2d').drawImage(cv, 0, 0) } catch (e) { /* ignore */ }
+        }
+      })
+      c.style.marginBottom = '14px'
+      wrap.appendChild(c)
+    }
+    wrap.insertAdjacentHTML('beforeend',
+      '<div style="text-align:center;font-size:11px;color:#b3b8bf;margin-top:8px">—— 由 小遥账单助手 生成 ——</div>')
+    document.body.appendChild(wrap)
+    const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#f5f7fa', logging: false })
+    document.body.removeChild(wrap)
+    canvas.toBlob((b) => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(b)
+      a.download = `小遥对话-${title.slice(0, 12)}.png`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }, 'image/png')
+    ui.showSuccess('图片已生成')
+    exitSelect()
+  } catch (e) {
+    ui.showError('生成图片失败: ' + (e.message || ''))
+  } finally {
+    imgBusy.value = false
+  }
 }
 
 async function renameChat(c) {
@@ -583,6 +730,39 @@ async function renameChat(c) {
   animation: pulse 1.6s infinite;
 }
 @keyframes pulse { 0%,100% { box-shadow: 0 3px 10px rgba(255,59,48,.3); } 50% { box-shadow: 0 3px 16px rgba(255,59,48,.55); } }
+
+/* ===== 选择模式(Kimi 风格) ===== */
+.msg-row.selectable { cursor: pointer; border-radius: 12px; padding: 6px; margin: -6px -6px 14px; transition: background .12s; }
+.msg-row.selectable:hover { background: #f5f8fc; }
+.msg-row.selectable .msg-actions { display: none; }
+.msg-row.selected .bubble { box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.35); }
+.sel-dot {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; align-self: center;
+  border: 1.5px solid #d2d2d7; background: #fff;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 11px; transition: all .12s;
+}
+.sel-dot.on { background: #007AFF; border-color: #007AFF; }
+.sel-dot.small { width: 20px; height: 20px; font-size: 10px; }
+
+.select-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 13px 18px; border-top: 1px solid #f0f0f3; background: #fff;
+}
+.sel-all {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: none; background: none; font-size: 14px; color: #1d1d1f; cursor: pointer;
+}
+.sel-actions { flex: 1; display: flex; justify-content: center; gap: 26px; flex-wrap: wrap; }
+.sel-act {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: none; background: none; color: #007AFF; font-size: 14px; cursor: pointer;
+  padding: 6px 4px; transition: opacity .12s;
+}
+.sel-act:hover:not(:disabled) { opacity: .75; }
+.sel-act:disabled { color: #b3b8bf; cursor: not-allowed; }
+.sel-cancel { border: none; background: none; color: #6e6e73; font-size: 14px; cursor: pointer; }
+.sel-cancel:hover { color: #1d1d1f; }
 
 /* 消息操作条 */
 .msg-actions { margin-top: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
