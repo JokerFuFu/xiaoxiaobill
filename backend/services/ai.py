@@ -27,48 +27,57 @@ def _cfg_file(uid):
     return os.path.join(UPLOAD_FOLDER, uid, '_ai_config.json')
 
 
-def get_ai_config(uid):
-    """返回该用户生效的 AI 配置 {base_url, api_key, model, source}。
-    用户自定义优先;否则用环境变量默认(Kimi)。"""
-    custom = {}
+def _load_user_cfg(uid):
     try:
         p = _cfg_file(uid)
         if os.path.exists(p):
             with open(p, encoding='utf-8') as f:
-                custom = json.load(f) or {}
+                return json.load(f) or {}
     except Exception:
-        custom = {}
+        pass
+    return {}
+
+
+def get_ai_config(uid):
+    """返回该用户生效的 AI 配置 {base_url, api_key, model, source, custom_providers}。
+    用户自定义优先;否则回落环境变量默认(若部署方配置了)。"""
+    custom = _load_user_cfg(uid)
+    providers = custom.get('custom_providers') or []
     if custom.get('api_key'):
         return {
             'base_url': (custom.get('base_url') or AI_BASE_URL).rstrip('/'),
             'api_key': custom['api_key'],
             'model': custom.get('model') or AI_MODEL,
             'source': 'custom',
+            'custom_providers': providers,
         }
-    return {'base_url': AI_BASE_URL, 'api_key': AI_API_KEY, 'model': AI_MODEL, 'source': 'default'}
+    return {'base_url': AI_BASE_URL, 'api_key': AI_API_KEY, 'model': AI_MODEL,
+            'source': 'default', 'custom_providers': providers}
 
 
-def save_ai_config(uid, base_url=None, api_key=None, model=None):
-    """保存用户自定义配置;api_key 为 None 表示保留旧 key,空串表示清除自定义(回落默认)。"""
+def save_ai_config(uid, base_url=None, api_key=None, model=None, custom_providers=None):
+    """保存用户配置。api_key: None=不改 / ''=清除自己的key(回落默认) / 其他=新key。
+    custom_providers: None=不改 / list=整体替换(自定义供应商列表,与 key 互不影响)。"""
     with _cfg_lock:
         p = _cfg_file(uid)
-        old = {}
-        if os.path.exists(p):
-            try:
-                with open(p, encoding='utf-8') as f:
-                    old = json.load(f) or {}
-            except Exception:
-                old = {}
-        if api_key == '':
-            # 清除自定义配置 → 回落默认
-            if os.path.exists(p):
-                os.remove(p)
-            return get_ai_config(uid)
+        old = _load_user_cfg(uid)
         new = {
             'base_url': (base_url if base_url is not None else old.get('base_url', '')).strip(),
-            'api_key': api_key if api_key is not None else old.get('api_key', ''),
+            'api_key': ('' if api_key == '' else (api_key if api_key is not None else old.get('api_key', ''))),
             'model': (model if model is not None else old.get('model', '')).strip(),
+            'custom_providers': custom_providers if custom_providers is not None else (old.get('custom_providers') or []),
         }
+        # 规范化自定义供应商
+        cps = []
+        for cp in new['custom_providers'][:20]:
+            if not isinstance(cp, dict):
+                continue
+            name = str(cp.get('name', '')).strip()[:20]
+            burl = str(cp.get('base_url', '')).strip()
+            if name and burl.startswith(('http://', 'https://')):
+                cps.append({'name': name, 'base_url': burl, 'model': str(cp.get('model', '')).strip()[:60]})
+        new['custom_providers'] = cps
+
         os.makedirs(os.path.dirname(p), exist_ok=True)
         tmp = p + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:

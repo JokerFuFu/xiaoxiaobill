@@ -52,16 +52,19 @@ def _require_ai():
 # ============ 每用户模型配置 ============
 @ai_bp.route('/api/ai/config', methods=['GET'])
 def get_config():
-    cfg = ai_svc.get_ai_config(_uid())
+    """只返回用户自己配置的内容;系统默认(若有)只给布尔标志,不泄露 Key/URL。"""
+    uid = _uid()
+    cfg = ai_svc.get_ai_config(uid)
+    user = ai_svc._load_user_cfg(uid)   # 用户自己存的(可能为空)
+    is_custom = cfg['source'] == 'custom'
     return jsonify({'success': True, 'config': {
-        'base_url': cfg['base_url'],
-        'model': cfg['model'],
-        'api_key_masked': ai_svc.mask_key(cfg['api_key']),
-        'has_key': bool(cfg['api_key']),
-        'source': cfg['source'],   # custom=用户自定义 / default=系统默认
-        'default_base_url': AI_BASE_URL,
-        'default_model': AI_MODEL,
-        'has_default': AI_ENABLED,
+        'base_url': user.get('base_url', ''),
+        'model': user.get('model', ''),
+        'api_key_masked': ai_svc.mask_key(cfg['api_key']) if is_custom else '',
+        'has_key': is_custom,                # 用户是否配了自己的 key
+        'source': cfg['source'],             # custom=用户自定义 / default=系统默认(若部署方设了env)
+        'has_default': AI_ENABLED,           # 系统是否有默认配置(不暴露内容)
+        'custom_providers': cfg.get('custom_providers') or [],
     }})
 
 
@@ -70,14 +73,19 @@ def save_config():
     data = request.get_json(silent=True) or {}
     base_url = (data.get('base_url') or '').strip()
     model = (data.get('model') or '').strip()
-    api_key = data.get('api_key')   # None=不改 / ''=清除自定义回落默认 / 其他=新key
+    api_key = data.get('api_key')   # None=不改 / ''=清除自己的key / 其他=新key
     if api_key is not None:
         api_key = api_key.strip()
+    custom_providers = data.get('custom_providers')   # None=不改 / list=整体替换
+    if custom_providers is not None and not isinstance(custom_providers, list):
+        return jsonify({'success': False, 'error': 'custom_providers 须为数组'}), 400
     if api_key and (base_url and not base_url.startswith(('http://', 'https://'))):
         return jsonify({'success': False, 'error': 'Base URL 需以 http(s):// 开头'}), 400
-    cfg = ai_svc.save_ai_config(_uid(), base_url=base_url or None, api_key=api_key, model=model or None)
+    cfg = ai_svc.save_ai_config(_uid(), base_url=base_url or None, api_key=api_key,
+                                model=model or None, custom_providers=custom_providers)
     return jsonify({'success': True, 'source': cfg['source'],
-                    'api_key_masked': ai_svc.mask_key(cfg['api_key'])})
+                    'api_key_masked': ai_svc.mask_key(cfg['api_key']) if cfg['source'] == 'custom' else '',
+                    'custom_providers': cfg.get('custom_providers') or []})
 
 
 @ai_bp.route('/api/ai/config/test', methods=['POST'])

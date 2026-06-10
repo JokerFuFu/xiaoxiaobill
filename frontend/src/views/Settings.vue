@@ -169,28 +169,52 @@
       <h2 class="section-title"><i class="fas fa-sliders-h title-icon ai-color"></i> AI 模型配置</h2>
       <div class="ai-card">
         <p class="ai-desc">
-          接入任意 <strong>Anthropic 兼容</strong>(/v1/messages)的大模型服务,用于 AI 助手对话与智能识别。每个账号独立配置。
-          <span v-if="aiCfg.source === 'default' && aiCfg.has_default" class="cfg-badge default">当前使用系统默认 · {{ aiCfg.default_model }}</span>
-          <span v-else-if="aiCfg.source === 'custom'" class="cfg-badge custom">已自定义 · {{ aiCfg.model }}</span>
+          接入任意 <strong>Anthropic 兼容</strong>(/v1/messages)的大模型服务,用于 AI 助手对话与智能识别。
+          配置只保存在<strong>你自己的账号</strong>里,服务器不持有任何人的 Key。
+          <span v-if="aiCfg.has_key" class="cfg-badge custom">已配置 · {{ form.model || '默认模型' }}</span>
+          <span v-else class="cfg-badge default">未配置(AI 功能需先填入 API Key)</span>
         </p>
 
-        <!-- 服务商快捷预设 -->
+        <!-- 服务商预设(2026-06 最新模型) + 自定义 -->
         <div class="provider-row">
           <button
-            v-for="p in providers" :key="p.name"
+            v-for="p in builtinProviders" :key="p.name"
             class="provider-chip" :class="{ active: form.base_url === p.base_url }"
             @click="applyProvider(p)"
           >{{ p.name }}</button>
+          <button
+            v-for="p in customProviders" :key="'c_' + p.name"
+            class="provider-chip custom-chip" :class="{ active: form.base_url === p.base_url }"
+            @click="applyProvider(p)"
+          >
+            {{ p.name }}
+            <i class="fas fa-times chip-del" @click.stop="removeProvider(p)" title="删除"></i>
+          </button>
+          <button class="provider-chip add-chip" :class="{ active: showAddProvider }" @click="showAddProvider = !showAddProvider">
+            <i class="fas fa-plus"></i> 自定义
+          </button>
+        </div>
+
+        <!-- 自定义供应商表单 -->
+        <div v-if="showAddProvider" class="add-provider">
+          <input v-model.trim="newProvider.name" placeholder="供应商名称,如 公司网关" />
+          <input v-model.trim="newProvider.base_url" placeholder="服务地址 https://..." class="ap-url" />
+          <input v-model.trim="newProvider.model" placeholder="默认模型(可选)" />
+          <button class="save-btn" @click="addProvider"><i class="fas fa-check"></i> 保存</button>
+          <button class="reset-btn" @click="showAddProvider = false">取消</button>
         </div>
 
         <div class="cfg-grid">
           <div class="cfg-field">
             <label>服务地址 Base URL</label>
-            <input v-model.trim="form.base_url" placeholder="https://api.kimi.com/coding/" />
+            <input v-model.trim="form.base_url" placeholder="选择上方供应商或手动输入 https://..." />
           </div>
           <div class="cfg-field">
-            <label>模型 Model</label>
-            <input v-model.trim="form.model" placeholder="kimi-k2-0905-preview" />
+            <label>模型 Model <span class="muted" v-if="modelSuggestions.length">(可下拉选该供应商常用模型)</span></label>
+            <input v-model.trim="form.model" list="model-suggestions" placeholder="如 kimi-k2.5" />
+            <datalist id="model-suggestions">
+              <option v-for="m in modelSuggestions" :key="m" :value="m" />
+            </datalist>
           </div>
           <div class="cfg-field full">
             <label>API Key <span class="muted" v-if="aiCfg.has_key">(已保存 {{ aiCfg.api_key_masked }},留空表示不修改)</span></label>
@@ -205,8 +229,8 @@
           <button class="save-btn" @click="saveAiConfig" :disabled="aiBusy">
             <i class="fas fa-check"></i> 保存配置
           </button>
-          <button v-if="aiCfg.source === 'custom' && aiCfg.has_default" class="reset-btn" @click="resetAiConfig" :disabled="aiBusy">
-            恢复系统默认
+          <button v-if="aiCfg.has_key" class="reset-btn" @click="resetAiConfig" :disabled="aiBusy">
+            清除我的 Key
           </button>
           <span v-if="aiTestResult" class="test-result" :class="{ ok: aiTestOk }">
             <i :class="aiTestOk ? 'fas fa-circle-check' : 'fas fa-circle-xmark'"></i> {{ aiTestResult }}
@@ -346,28 +370,84 @@ const aiBusy = ref('')
 const aiTestResult = ref('')
 const aiTestOk = ref(false)
 
-// Anthropic 兼容服务商预设(参考各家官方文档的 Anthropic compatible endpoint)
-const providers = [
-  { name: 'Kimi', base_url: 'https://api.kimi.com/coding/', model: 'kimi-k2-0905-preview' },
-  { name: 'DeepSeek', base_url: 'https://api.deepseek.com/anthropic', model: 'deepseek-chat' },
-  { name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/anthropic', model: 'glm-4.6' },
-  { name: 'MiniMax', base_url: 'https://api.minimaxi.com/anthropic', model: 'MiniMax-M2' },
-  { name: 'Claude 官方', base_url: 'https://api.anthropic.com', model: 'claude-sonnet-4-6' }
+// Anthropic 兼容服务商预设(2026-06 各家最新模型,参考 cc-switch/cc-compatible-models 清单)
+const builtinProviders = [
+  { name: 'Kimi 会员版', base_url: 'https://api.kimi.com/coding/', model: 'kimi-k2.5',
+    models: ['kimi-k2.5', 'kimi-k2-thinking', 'kimi-latest', 'kimi-k2-0905-preview'] },
+  { name: 'Kimi 开放平台', base_url: 'https://api.moonshot.cn/anthropic', model: 'kimi-k2.5',
+    models: ['kimi-k2.5', 'kimi-k2-thinking', 'kimi-latest'] },
+  { name: 'DeepSeek', base_url: 'https://api.deepseek.com/anthropic', model: 'deepseek-chat',
+    models: ['deepseek-chat', 'deepseek-reasoner'] },
+  { name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/anthropic', model: 'glm-5.1',
+    models: ['glm-5.1', 'glm-5', 'glm-4.6'] },
+  { name: '通义千问', base_url: 'https://dashscope.aliyuncs.com/apps/anthropic', model: 'qwen3.6-plus',
+    models: ['qwen3.6-plus', 'qwen3-max', 'qwen3-coder-plus'] },
+  { name: 'MiniMax', base_url: 'https://api.minimaxi.com/anthropic', model: 'minimax-m2.7',
+    models: ['minimax-m2.7', 'MiniMax-M2'] },
+  { name: 'Claude 官方', base_url: 'https://api.anthropic.com', model: 'claude-sonnet-4-6',
+    models: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'] },
+  { name: 'OpenRouter', base_url: 'https://openrouter.ai/api', model: 'anthropic/claude-sonnet-4.6',
+    models: ['anthropic/claude-sonnet-4.6', 'anthropic/claude-opus-4.8', 'moonshotai/kimi-k2.5', 'deepseek/deepseek-chat'] },
+  { name: 'SiliconFlow', base_url: 'https://api.siliconflow.cn', model: 'deepseek-ai/DeepSeek-V3.2',
+    models: ['deepseek-ai/DeepSeek-V3.2', 'Qwen/Qwen3-Max', 'moonshotai/Kimi-K2.5'] },
+  { name: 'Ollama 本地', base_url: 'http://localhost:11434', model: 'qwen3-coder',
+    models: ['qwen3-coder', 'deepseek-r1', 'llama4'] }
 ]
+
+// 用户自定义供应商(存在自己账号配置里)
+const customProviders = ref([])
+const showAddProvider = ref(false)
+const newProvider = ref({ name: '', base_url: '', model: '' })
+
+// 当前 base_url 匹配的预设 → 模型联想列表
+const modelSuggestions = computed(() => {
+  const all = [...builtinProviders, ...customProviders.value]
+  const hit = all.find(p => p.base_url === form.value.base_url)
+  return hit?.models || (hit?.model ? [hit.model] : [])
+})
 
 function applyProvider(p) {
   form.value.base_url = p.base_url
-  form.value.model = p.model
+  form.value.model = p.model || ''
   aiTestResult.value = ''
+}
+
+async function addProvider() {
+  const p = newProvider.value
+  if (!p.name.trim() || !p.base_url.trim().startsWith('http')) {
+    uiStore.showError('请填写名称和合法的 Base URL(http(s)://开头)')
+    return
+  }
+  const list = [...customProviders.value.filter(c => c.name !== p.name.trim()),
+                { name: p.name.trim(), base_url: p.base_url.trim(), model: p.model.trim() }]
+  try {
+    await api.aiSaveConfig({ custom_providers: list })
+    customProviders.value = list
+    applyProvider(list[list.length - 1])
+    newProvider.value = { name: '', base_url: '', model: '' }
+    showAddProvider.value = false
+    uiStore.showSuccess('自定义供应商已保存')
+  } catch (e) { uiStore.showError('保存失败: ' + e.message) }
+}
+
+async function removeProvider(p) {
+  if (!confirm(`删除自定义供应商「${p.name}」?`)) return
+  const list = customProviders.value.filter(c => c.name !== p.name)
+  try {
+    await api.aiSaveConfig({ custom_providers: list })
+    customProviders.value = list
+  } catch (e) { uiStore.showError('删除失败: ' + e.message) }
 }
 
 async function loadAiConfig() {
   try {
     const r = await api.aiGetConfig()
     aiCfg.value = r.config
+    // 只回填用户自己保存的配置;系统默认不下发、不展示
     form.value.base_url = r.config.base_url || ''
     form.value.model = r.config.model || ''
     form.value.api_key = ''
+    customProviders.value = r.config.custom_providers || []
   } catch (e) { /* 未登录等场景忽略 */ }
 }
 
@@ -399,12 +479,12 @@ async function saveAiConfig() {
 }
 
 async function resetAiConfig() {
-  if (!confirm('恢复为系统默认模型配置？你保存的自定义 Key 将被删除。')) return
+  if (!confirm('清除你保存的 API Key？清除后 AI 功能将不可用,需重新配置。')) return
   aiBusy.value = 'reset'
   try {
     await api.aiSaveConfig({ api_key: '' })
     await loadAiConfig()
-    uiStore.showSuccess('已恢复系统默认')
+    uiStore.showSuccess('已清除你的 Key')
   } catch (e) { uiStore.showError('操作失败: ' + e.message) }
   finally { aiBusy.value = '' }
 }
@@ -1092,6 +1172,21 @@ async function handleClearAllData() {
 }
 .provider-chip:hover { border-color: #007AFF; color: #007AFF; }
 .provider-chip.active { background: #eaf3ff; border-color: #007AFF; color: #007AFF; font-weight: 500; }
+.custom-chip { display: inline-flex; align-items: center; gap: 7px; border-style: dashed; }
+.chip-del { color: #c0c0c0; font-size: 11px; cursor: pointer; }
+.chip-del:hover { color: #ff3b30; }
+.add-chip { color: #007AFF; border-style: dashed; }
+.add-provider {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: #f7f9fc; border: 1px dashed #c9d8ec; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.add-provider input {
+  height: 36px; border: 1px solid #e2e2e8; border-radius: 9px; padding: 0 11px;
+  font-size: 13px; outline: none; flex: 1; min-width: 140px;
+}
+.add-provider input:focus { border-color: #007AFF; }
+.add-provider .ap-url { flex: 2; min-width: 220px; }
 
 .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
 .cfg-field { display: flex; flex-direction: column; }
