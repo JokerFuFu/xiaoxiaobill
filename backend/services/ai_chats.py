@@ -93,6 +93,17 @@ def append_chat(uid, cid, user_content, assistant_content, tools=None):
         return chat['id']
 
 
+def rename_chat(uid, cid, title):
+    with _lock:
+        chats = _load(uid)
+        for c in chats:
+            if c['id'] == cid:
+                c['title'] = title.strip()[:30]
+                _save(uid, chats)
+                return True
+        return False
+
+
 def delete_chat(uid, cid):
     with _lock:
         chats = _load(uid)

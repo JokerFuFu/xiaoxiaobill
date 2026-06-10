@@ -114,7 +114,7 @@ def chat():
     # 上下文:有 chat_id 用服务端存的历史(权威),否则用客户端传的
     history = chat_svc.history_for(uid, chat_id) if chat_id else data.get('history')
     try:
-        result = ai_svc.chat_over_transactions(df, question, history, cfg=_cfg())
+        result = ai_svc.chat_over_transactions(df, question, history, cfg=_cfg(), uid=uid)
     except Exception as e:
         logger.exception("AI chat 失败")
         return jsonify({'success': False, 'error': f'AI 调用失败: {e}'}), 500
@@ -144,6 +144,33 @@ def get_chat(cid):
 def delete_chat(cid):
     ok = chat_svc.delete_chat(_uid(), cid)
     return jsonify({'success': ok} if ok else {'success': False, 'error': '会话不存在'})
+
+
+@ai_bp.route('/api/ai/chats/<cid>', methods=['PUT'])
+def rename_chat(cid):
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    if not title:
+        return jsonify({'success': False, 'error': '标题不能为空'}), 400
+    ok = chat_svc.rename_chat(_uid(), cid, title)
+    return jsonify({'success': ok} if ok else {'success': False, 'error': '会话不存在'})
+
+
+# ============ 导出文件下载(AI 生成) ============
+import re as _re_dl
+from flask import send_from_directory
+
+
+@ai_bp.route('/api/ai/exports/<path:filename>')
+def download_export(filename):
+    """下载 AI 导出的文件(仅当前用户自己的 _exports 目录)。"""
+    filename = os.path.basename(filename)   # 去掉任何路径成分
+    if not _re_dl.match(r'^[\w一-龥()\-.]+\.(xlsx|csv)$', filename):
+        return jsonify({'success': False, 'error': '非法文件名'}), 400
+    exp_dir = os.path.join(get_session_dir(), '_exports')
+    if not os.path.exists(os.path.join(exp_dir, filename)):
+        return jsonify({'success': False, 'error': '文件不存在或已过期'}), 404
+    return send_from_directory(exp_dir, filename, as_attachment=True)
 
 
 def _extract_text(file_storage):

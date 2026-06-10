@@ -145,10 +145,11 @@ export const api = {
 
   // ==================== AI ====================
   aiStatus: () => get('/ai/status'),
-  aiChat: (question, history, chat_id) => post('/ai/chat', { question, history, chat_id }),
+  aiChat: (question, history, chat_id, signal) => post('/ai/chat', { question, history, chat_id }, signal),
   aiChats: () => get('/ai/chats'),
   aiChatGet: (id) => get(`/ai/chats/${id}`),
   aiChatDelete: (id) => delete_(`/ai/chats/${id}`),
+  aiChatRename: (id, title) => put(`/ai/chats/${id}`, { title }),
   aiRecognize: (formData) => post('/ai/recognize', formData),
   aiRecognizeText: (text, hint) => post('/ai/recognize', { text, hint }),
   aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name }),
@@ -213,14 +214,15 @@ async function get(endpoint, params) {
  * @param {string} endpoint - API 端点
  * @param {Object|FormData} data - 请求数据
  */
-async function post(endpoint, data) {
+async function post(endpoint, data, signal) {
   const isFormData = data instanceof FormData
 
   const response = await fetch(API_BASE + endpoint, {
     method: 'POST',
     credentials: 'same-origin',
     headers: isFormData ? {} : { 'Content-Type': 'application/json' },
-    body: isFormData ? data : JSON.stringify(data)
+    body: isFormData ? data : JSON.stringify(data),
+    signal
   })
   _check401(response)
 

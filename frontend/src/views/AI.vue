@@ -21,6 +21,12 @@
         <button class="ghost-btn" @click="newChat" title="开启新对话">
           <i class="fas fa-plus"></i> 新对话
         </button>
+        <button v-if="messages.length" class="ghost-btn" @click="copyChat" title="复制整段对话">
+          <i class="fas fa-copy"></i> 复制
+        </button>
+        <button v-if="messages.length" class="ghost-btn" @click="exportChat" title="导出为 Markdown 文件">
+          <i class="fas fa-file-arrow-down"></i> 导出
+        </button>
         <router-link to="/settings" class="ghost-btn" title="模型配置">
           <i class="fas fa-sliders-h"></i> 模型配置
         </router-link>
@@ -55,6 +61,7 @@
                 <span class="hi-title">{{ c.title }}</span>
                 <span class="hi-meta">{{ shortTime(c.updated_at) }} · {{ c.count }} 条</span>
               </div>
+              <button class="hi-del" @click.stop="renameChat(c)" title="重命名"><i class="fas fa-pen"></i></button>
               <button class="hi-del" @click.stop="removeChat(c)" title="删除"><i class="fas fa-trash-can"></i></button>
             </div>
           </div>
@@ -84,7 +91,7 @@
               <i v-else class="fas fa-user"></i>
             </div>
             <div class="msg-body">
-              <div class="bubble" :class="[m.role, { error: m.error }]">
+              <div class="bubble" :class="[m.role, { error: m.error, 'info-bubble': m.info }]">
                 <template v-if="m.role === 'assistant'">
                   <template v-for="(seg, si) in segments(m.content)" :key="si">
                     <div v-if="seg.md" class="md" v-html="render(seg.text)"></div>
@@ -95,9 +102,16 @@
               </div>
               <div v-if="m.tools && m.tools.length" class="tools">
                 <span v-for="(t, ti) in m.tools" :key="ti" class="tool-chip">
-                  <i class="fas fa-magnifying-glass-chart"></i>
+                  <i :class="t.name === 'export_transactions' ? 'fas fa-file-export' : 'fas fa-magnifying-glass-chart'"></i>
                   {{ toolLabel(t) }}
                 </span>
+              </div>
+              <!-- 消息操作:复制 / 重新生成(末条) -->
+              <div v-if="m.role === 'assistant' && !m.info" class="msg-actions">
+                <button class="act-btn" @click="copyMsg(m)" title="复制回答"><i class="fas fa-copy"></i></button>
+                <button v-if="i === messages.length - 1 && !loading" class="act-btn" @click="regenerate" title="重新生成">
+                  <i class="fas fa-rotate-right"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -115,13 +129,19 @@
 
         <!-- 输入区 -->
         <div class="composer">
-          <input
+          <textarea
+            ref="inputBox"
             v-model="input"
-            @keyup.enter="send"
+            rows="1"
+            @keydown.enter.exact.prevent="send"
+            @input="autoGrow"
             :disabled="loading"
-            placeholder="问问你的账单，比如：最近半年每月支出趋势，画个图"
-          />
-          <button class="send-btn" @click="send" :disabled="loading || !input.trim()" title="发送">
+            placeholder="问问你的账单…(Enter 发送,Shift+Enter 换行)"
+          ></textarea>
+          <button v-if="loading" class="send-btn stop" @click="stopGen" title="停止生成">
+            <i class="fas fa-stop"></i>
+          </button>
+          <button v-else class="send-btn" @click="send" :disabled="!input.trim()" title="发送">
             <i class="fas fa-paper-plane"></i>
           </button>
         </div>
@@ -136,6 +156,17 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import api from '@/api/client'
 import AiChart from '@/components/AiChart.vue'
+import { useUiStore } from '@/stores/ui'
+
+const ui = useUiStore()
+
+// 链接在新窗口打开(下载链接/外链),只加属性不放行脚本
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener')
+  }
+})
 
 const enabled = ref(true)
 const model = ref('')
@@ -195,8 +226,8 @@ function segments(content) {
 }
 
 function toolLabel(t) {
-  const name = t.name === 'data_overview' ? '数据概览' : '查询交易'
-  const parts = [name]
+  const names = { data_overview: '数据概览', export_transactions: '导出文件', query_transactions: '查询交易' }
+  const parts = [names[t.name] || t.name]
   if (t.count != null) parts.push(`${t.count} 笔`)
   if (t.total != null) parts.push(`¥${Number(t.total).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`)
   return parts.join(' · ')
@@ -251,30 +282,113 @@ async function removeChat(c) {
   } catch (e) { /* ignore */ }
 }
 
-// ===== 发送 =====
+// ===== 发送 / 停止 / 重新生成 =====
+const inputBox = ref(null)
+let abortCtrl = null
+
+function autoGrow() {
+  const el = inputBox.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px'
+}
+
 function quickAsk(q) { input.value = q; send() }
 
-async function send() {
-  const q = input.value.trim()
+function stopGen() {
+  if (abortCtrl) abortCtrl.abort()
+}
+
+async function ask(q, { pushUser = true } = {}) {
   if (!q || loading.value) return
-  messages.value.push({ role: 'user', content: q })
-  input.value = ''
+  if (pushUser) messages.value.push({ role: 'user', content: q })
   loading.value = true
+  abortCtrl = new AbortController()
   scrollDown()
   try {
     const history = chatId.value ? undefined : messages.value
-      .filter(m => !m.error).slice(-7, -1)
+      .filter(m => !m.error && !m.info).slice(-7, -1)
       .map(m => ({ role: m.role, content: m.content }))
-    const r = await api.aiChat(q, history, chatId.value)
+    const r = await api.aiChat(q, history, chatId.value, abortCtrl.signal)
     if (r.chat_id) chatId.value = r.chat_id
     messages.value.push({ role: 'assistant', content: r.answer, tools: r.tool_calls })
     refreshChats()
   } catch (e) {
-    messages.value.push({ role: 'assistant', content: '出错了：' + (e.message || '调用失败'), error: true })
+    if (e.name === 'AbortError') {
+      messages.value.push({ role: 'assistant', content: '⏹ 已停止生成。完整回答仍会保存到历史,稍后可在「历史」里查看。', info: true })
+      setTimeout(refreshChats, 8000)   // 服务端跑完后刷新列表
+    } else {
+      messages.value.push({ role: 'assistant', content: '出错了：' + (e.message || '调用失败'), error: true })
+    }
   } finally {
     loading.value = false
+    abortCtrl = null
     scrollDown()
   }
+}
+
+async function send() {
+  const q = input.value.trim()
+  if (!q) return
+  input.value = ''
+  await nextTick(); autoGrow()
+  ask(q)
+}
+
+function regenerate() {
+  // 找最后一个用户提问,移除其后的 assistant 回答,重新生成
+  const lastUserIdx = [...messages.value].map(m => m.role).lastIndexOf('user')
+  if (lastUserIdx < 0) return
+  const q = messages.value[lastUserIdx].content
+  messages.value = messages.value.slice(0, lastUserIdx + 1)
+  ask(q, { pushUser: false })
+}
+
+// ===== 复制 / 导出 =====
+async function copyText(text, tip) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ui.showSuccess(tip || '已复制')
+  } catch (e) {
+    // 非 https/旧浏览器回退
+    const ta = document.createElement('textarea')
+    ta.value = text; document.body.appendChild(ta); ta.select()
+    document.execCommand('copy'); document.body.removeChild(ta)
+    ui.showSuccess(tip || '已复制')
+  }
+}
+
+function copyMsg(m) { copyText(m.content, '回答已复制') }
+
+function chatToMarkdown() {
+  const title = (chats.value.find(c => c.id === chatId.value)?.title) || '对话'
+  const lines = [`# ${title}`, '', `> 导出自 小遥账单 AI 助手 · ${new Date().toLocaleString('zh-CN')}`, '']
+  for (const m of messages.value) {
+    if (m.info) continue
+    lines.push(m.role === 'user' ? '## 🙋 我' : '## 🤖 小遥', '', m.content, '')
+  }
+  return lines.join('\n')
+}
+
+function copyChat() { copyText(chatToMarkdown(), '整段对话已复制') }
+
+function exportChat() {
+  const title = (chats.value.find(c => c.id === chatId.value)?.title) || '对话'
+  const blob = new Blob([chatToMarkdown()], { type: 'text/markdown;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `小遥对话-${title.slice(0, 16)}.md`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+async function renameChat(c) {
+  const t = prompt('重命名对话:', c.title)
+  if (!t || t.trim() === c.title) return
+  try {
+    await api.aiChatRename(c.id, t.trim())
+    await refreshChats()
+  } catch (e) { ui.showError('重命名失败: ' + e.message) }
 }
 </script>
 
@@ -446,12 +560,13 @@ async function send() {
   display: flex; gap: 10px; padding: 14px 16px;
   border-top: 1px solid #f0f0f3; background: #fcfcfd;
 }
-.composer input {
-  flex: 1; height: 46px; border: 1px solid #e2e2e8; border-radius: 23px;
-  padding: 0 20px; font-size: 14px; outline: none; background: #fff;
-  transition: all .15s;
+.composer textarea {
+  flex: 1; min-height: 46px; max-height: 140px; border: 1px solid #e2e2e8; border-radius: 23px;
+  padding: 12px 20px; font-size: 14px; line-height: 1.5; outline: none; background: #fff;
+  resize: none; font-family: inherit; transition: border-color .15s, box-shadow .15s;
+  box-sizing: border-box;
 }
-.composer input:focus { border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.10); }
+.composer textarea:focus { border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.10); }
 .send-btn {
   width: 46px; height: 46px; border: none; border-radius: 50%;
   background: linear-gradient(135deg, #007AFF, #2E8FFF); color: #fff;
@@ -462,6 +577,31 @@ async function send() {
 }
 .send-btn:hover:not(:disabled) { transform: scale(1.05); }
 .send-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.send-btn.stop {
+  background: linear-gradient(135deg, #ff5b51, #ff3b30);
+  box-shadow: 0 3px 10px rgba(255, 59, 48, 0.3);
+  animation: pulse 1.6s infinite;
+}
+@keyframes pulse { 0%,100% { box-shadow: 0 3px 10px rgba(255,59,48,.3); } 50% { box-shadow: 0 3px 16px rgba(255,59,48,.55); } }
+
+/* 消息操作条 */
+.msg-actions { margin-top: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.msg-row:hover .msg-actions { opacity: 1; }
+.act-btn {
+  border: none; background: none; color: #b3b8bf; cursor: pointer;
+  font-size: 12px; padding: 4px 7px; border-radius: 7px; transition: all .12s;
+}
+.act-btn:hover { color: #007AFF; background: #eef5ff; }
+
+/* 信息提示气泡(停止生成等) */
+.bubble.info-bubble { background: #f6f7f9; color: #9aa0a6; font-size: 13px; }
+
+/* Markdown 链接(含下载链接) */
+.md :deep(a) {
+  color: #007AFF; text-decoration: none; font-weight: 500;
+  border-bottom: 1px dashed #9cc5ff;
+}
+.md :deep(a:hover) { border-bottom-style: solid; }
 
 @media (max-width: 820px) {
   .history-panel { position: absolute; z-index: 20; height: 70%; }

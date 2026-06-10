@@ -149,10 +149,69 @@ _OVERVIEW_TOOL = {
     'input_schema': {'type': 'object', 'properties': {}},
 }
 
+_EXPORT_TOOL = {
+    'name': 'export_transactions',
+    'description': '把符合条件的交易导出为可下载的文件(xlsx/csv)。用户要"导出/下载/给我文件/生成表格文件"时调用。返回下载 url,你必须在回答中用 Markdown 链接给出。',
+    'input_schema': {
+        'type': 'object',
+        'properties': {
+            **{k: v for k, v in _QUERY_TOOL['input_schema']['properties'].items()
+               if k not in ('group_by', 'limit')},
+            'format': {'type': 'string', 'enum': ['xlsx', 'csv'], 'description': '文件格式,默认 xlsx'},
+            'name': {'type': 'string', 'description': '文件名(中文可,不带扩展名),如 6月支出明细'},
+        },
+    },
+}
 
-def _run_query(df, args):
+_EXPORT_COLS = ['交易时间', '交易分类', '交易对方', '商品说明', '收/支', '金额', '收/付款方式', '来源', '成员']
+MAX_EXPORT_ROWS = 20000
+MAX_EXPORT_FILES = 20
+
+
+def _run_export(df, args, uid):
+    """筛选→写文件到 upload/<uid>/_exports/,返回下载信息。"""
+    import re as _re
+    from datetime import datetime as _dt
+    d = _apply_filters(df, args).sort_values('交易时间', ascending=False)
+    if d.empty:
+        return {'ok': False, 'error': '没有匹配的交易,无文件生成'}
+    truncated = len(d) > MAX_EXPORT_ROWS
+    d = d.head(MAX_EXPORT_ROWS)
+
+    fmt = args.get('format') if args.get('format') in ('xlsx', 'csv') else 'xlsx'
+    raw = (args.get('name') or '').strip() or f"账单导出_{_dt.now():%m%d}"
+    safe = _re.sub(r'[^\w一-龥()-]', '', raw)[:30] or 'export'
+    filename = f"{safe}_{_dt.now():%H%M%S}.{fmt}"
+
+    exp_dir = os.path.join(UPLOAD_FOLDER, uid, '_exports')
+    os.makedirs(exp_dir, exist_ok=True)
+    path = os.path.join(exp_dir, filename)
+
+    out = d[[c for c in _EXPORT_COLS if c in d.columns]].copy()
+    out['交易时间'] = out['交易时间'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    if fmt == 'xlsx':
+        out.to_excel(path, index=False)
+    else:
+        out.to_csv(path, index=False, encoding='utf-8-sig')
+
+    # 只保留最近 N 个导出文件
+    try:
+        files = sorted((os.path.join(exp_dir, f) for f in os.listdir(exp_dir)),
+                       key=os.path.getmtime, reverse=True)
+        for old in files[MAX_EXPORT_FILES:]:
+            os.remove(old)
+    except Exception:
+        pass
+
+    total = round(float(d['金额'].sum()), 2)
+    return {'ok': True, 'filename': filename, 'url': f'/api/ai/exports/{filename}',
+            'count': int(len(d)), 'total_amount': total, 'truncated': truncated,
+            'hint': '请在回答中用 Markdown 链接提供下载,如 [📥 下载 ' + filename + '](url)'}
+
+
+def _apply_filters(df, args):
+    """query/export 共用的筛选逻辑。"""
     d = df.copy()
-    info = {}
     if args.get('start_date'):
         d = d[d['交易时间'] >= pd.to_datetime(args['start_date'])]
     if args.get('end_date'):
@@ -176,7 +235,12 @@ def _run_query(df, args):
         d = d[d['金额'] <= float(args['max_amount'])]
     if '是否退款' in d.columns:
         d = d[~d['是否退款']]
+    return d
 
+
+def _run_query(df, args):
+    d = _apply_filters(df, args)
+    info = {}
     info['count'] = int(len(d))
     info['total_amount'] = round(float(d['金额'].sum()), 2)
 
@@ -217,7 +281,7 @@ def _run_overview(df):
     return out
 
 
-def chat_over_transactions(df, question, history=None, cfg=None):
+def chat_over_transactions(df, question, history=None, cfg=None, uid=None):
     """对话式检索。history: [{'role','content'}]。返回 {answer, tool_calls}。"""
     today = pd.Timestamp.now().strftime('%Y-%m-%d')
     system = (
@@ -232,7 +296,9 @@ def chat_over_transactions(df, question, history=None, cfg=None):
         "```\n"
         '类型:bar(对比/排行)、line(趋势)、pie(占比,用 "data":[{"name":"餐饮","value":123}] 代替 categories/series)。'
         "图表数据必须来自工具查询结果,每次回答最多 2 个图表;图表外仍配一两句结论文字。"
-        "用户明确要求图表时必须输出;趋势/分布类问题主动配图。"
+        "用户明确要求图表时必须输出;趋势/分布类问题主动配图。\n"
+        "【导出文件】用户要导出/下载数据时,调用 export_transactions 工具(可选 xlsx/csv),"
+        "然后在回答中用 Markdown 链接给出下载地址,如 [📥 下载 6月支出明细.xlsx](工具返回的url),并附笔数与金额合计。"
     )
     messages = []
     for h in (history or [])[-6:]:
@@ -244,7 +310,7 @@ def chat_over_transactions(df, question, history=None, cfg=None):
     for _ in range(6):
         resp = _post_messages({
             'model': (cfg or {}).get('model') or AI_MODEL, 'max_tokens': 1500, 'system': system,
-            'messages': messages, 'tools': [_QUERY_TOOL, _OVERVIEW_TOOL],
+            'messages': messages, 'tools': ([_QUERY_TOOL, _OVERVIEW_TOOL, _EXPORT_TOOL] if uid else [_QUERY_TOOL, _OVERVIEW_TOOL]),
         }, cfg=cfg)
         content = resp.get('content', [])
         messages.append({'role': 'assistant', 'content': content})
@@ -256,7 +322,12 @@ def chat_over_transactions(df, question, history=None, cfg=None):
         for tu in tool_uses:
             name, args = tu.get('name'), tu.get('input', {}) or {}
             try:
-                out = _run_overview(df) if name == 'data_overview' else _run_query(df, args)
+                if name == 'data_overview':
+                    out = _run_overview(df)
+                elif name == 'export_transactions' and uid:
+                    out = _run_export(df, args, uid)
+                else:
+                    out = _run_query(df, args)
             except Exception as e:
                 out = {'error': str(e)}
             tool_calls.append({'name': name, 'input': args,
