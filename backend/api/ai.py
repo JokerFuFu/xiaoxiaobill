@@ -18,6 +18,7 @@ from config import AI_ENABLED, AI_MODEL, AI_BASE_URL
 from utils.session import get_session_dir, get_current_uid
 from services.data_loader import load_alipay_data
 from services import ai as ai_svc
+from services import ai_chats as chat_svc
 from services import members as member_svc
 
 logger = logging.getLogger(__name__)
@@ -102,18 +103,47 @@ def chat():
         return err
     data = request.get_json(silent=True) or {}
     question = (data.get('question') or '').strip()
+    chat_id = (data.get('chat_id') or '').strip() or None
     if not question:
         return jsonify({'success': False, 'error': '问题不能为空'}), 400
     try:
         df = load_alipay_data()
     except FileNotFoundError:
         return jsonify({'success': False, 'error': '当前账号还没有账单数据,请先上传'}), 400
+    uid = _uid()
+    # 上下文:有 chat_id 用服务端存的历史(权威),否则用客户端传的
+    history = chat_svc.history_for(uid, chat_id) if chat_id else data.get('history')
     try:
-        result = ai_svc.chat_over_transactions(df, question, data.get('history'), cfg=_cfg())
+        result = ai_svc.chat_over_transactions(df, question, history, cfg=_cfg())
     except Exception as e:
         logger.exception("AI chat 失败")
         return jsonify({'success': False, 'error': f'AI 调用失败: {e}'}), 500
-    return jsonify({'success': True, **result})
+    # 持久化本轮问答到会话历史
+    try:
+        chat_id = chat_svc.append_chat(uid, chat_id, question, result['answer'], result.get('tool_calls'))
+    except Exception:
+        logger.exception("保存对话历史失败(不影响回答)")
+    return jsonify({'success': True, 'chat_id': chat_id, **result})
+
+
+# ============ 对话历史 ============
+@ai_bp.route('/api/ai/chats')
+def list_chats():
+    return jsonify({'success': True, 'chats': chat_svc.list_chats(_uid())})
+
+
+@ai_bp.route('/api/ai/chats/<cid>')
+def get_chat(cid):
+    chat = chat_svc.get_chat(_uid(), cid)
+    if not chat:
+        return jsonify({'success': False, 'error': '会话不存在'}), 404
+    return jsonify({'success': True, 'chat': chat})
+
+
+@ai_bp.route('/api/ai/chats/<cid>', methods=['DELETE'])
+def delete_chat(cid):
+    ok = chat_svc.delete_chat(_uid(), cid)
+    return jsonify({'success': ok} if ok else {'success': False, 'error': '会话不存在'})
 
 
 def _extract_text(file_storage):

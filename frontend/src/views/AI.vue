@@ -15,8 +15,11 @@
         </div>
       </div>
       <div class="ai-actions">
-        <button v-if="messages.length" class="ghost-btn" @click="clearChat" title="清空对话">
-          <i class="fas fa-broom"></i> 清空对话
+        <button class="ghost-btn" :class="{ on: showHistory }" @click="toggleHistory" title="历史对话">
+          <i class="fas fa-clock-rotate-left"></i> 历史
+        </button>
+        <button class="ghost-btn" @click="newChat" title="开启新对话">
+          <i class="fas fa-plus"></i> 新对话
         </button>
         <router-link to="/settings" class="ghost-btn" title="模型配置">
           <i class="fas fa-sliders-h"></i> 模型配置
@@ -32,64 +35,96 @@
       <router-link to="/settings" class="primary-btn">去配置</router-link>
     </div>
 
-    <!-- 对话区 -->
-    <div v-else class="chat card">
-      <div class="messages" ref="msgBox">
-        <!-- 欢迎态 -->
-        <div v-if="messages.length === 0" class="welcome">
-          <img src="/images/logo_128.png" class="welcome-logo" alt="" />
-          <h3>你好，我是小遥</h3>
-          <p>你的私人账单分析师，用大白话问我任何账单问题</p>
-          <div class="suggest-grid">
-            <button v-for="ex in examples" :key="ex.q" class="suggest-card" @click="quickAsk(ex.q)">
-              <i :class="ex.icon"></i>
-              <span>{{ ex.q }}</span>
-            </button>
+    <!-- 主体:历史侧栏 + 对话 -->
+    <div v-else class="ai-body">
+      <!-- 历史侧栏 -->
+      <transition name="slide">
+        <div v-if="showHistory" class="history-panel card">
+          <div class="history-head">
+            <span>历史对话</span>
+            <button class="hclose" @click="showHistory = false"><i class="fas fa-times"></i></button>
           </div>
-        </div>
-
-        <!-- 消息流 -->
-        <div v-for="(m, i) in messages" :key="i" :class="['msg-row', m.role]">
-          <div class="avatar" :class="m.role">
-            <img v-if="m.role === 'assistant'" src="/images/logo_128.png" alt="AI" />
-            <i v-else class="fas fa-user"></i>
-          </div>
-          <div class="msg-body">
-            <div class="bubble" :class="[m.role, { error: m.error }]">
-              <div v-if="m.role === 'assistant'" class="md" v-html="render(m.content)"></div>
-              <span v-else>{{ m.content }}</span>
-            </div>
-            <div v-if="m.tools && m.tools.length" class="tools">
-              <span v-for="(t, ti) in m.tools" :key="ti" class="tool-chip">
-                <i class="fas fa-magnifying-glass-chart"></i>
-                {{ toolLabel(t) }}
-              </span>
+          <div class="history-list">
+            <div v-if="!chats.length" class="history-empty">还没有历史对话</div>
+            <div
+              v-for="c in chats" :key="c.id"
+              class="history-item" :class="{ active: c.id === chatId }"
+              @click="loadChat(c.id)"
+            >
+              <div class="hi-main">
+                <span class="hi-title">{{ c.title }}</span>
+                <span class="hi-meta">{{ shortTime(c.updated_at) }} · {{ c.count }} 条</span>
+              </div>
+              <button class="hi-del" @click.stop="removeChat(c)" title="删除"><i class="fas fa-trash-can"></i></button>
             </div>
           </div>
         </div>
+      </transition>
 
-        <!-- 打字中 -->
-        <div v-if="loading" class="msg-row assistant">
-          <div class="avatar assistant"><img src="/images/logo_128.png" alt="AI" /></div>
-          <div class="msg-body">
-            <div class="bubble assistant typing">
-              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <!-- 对话区 -->
+      <div class="chat card">
+        <div class="messages" ref="msgBox">
+          <!-- 欢迎态 -->
+          <div v-if="messages.length === 0" class="welcome">
+            <img src="/images/logo_128.png" class="welcome-logo" alt="" />
+            <h3>你好，我是小遥</h3>
+            <p>你的私人账单分析师，支持表格和图表回答</p>
+            <div class="suggest-grid">
+              <button v-for="ex in examples" :key="ex.q" class="suggest-card" @click="quickAsk(ex.q)">
+                <i :class="ex.icon"></i>
+                <span>{{ ex.q }}</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 消息流 -->
+          <div v-for="(m, i) in messages" :key="i" :class="['msg-row', m.role]">
+            <div class="avatar" :class="m.role">
+              <img v-if="m.role === 'assistant'" src="/images/logo_128.png" alt="AI" />
+              <i v-else class="fas fa-user"></i>
+            </div>
+            <div class="msg-body">
+              <div class="bubble" :class="[m.role, { error: m.error }]">
+                <template v-if="m.role === 'assistant'">
+                  <template v-for="(seg, si) in segments(m.content)" :key="si">
+                    <div v-if="seg.md" class="md" v-html="render(seg.text)"></div>
+                    <AiChart v-else :spec="seg.spec" />
+                  </template>
+                </template>
+                <span v-else>{{ m.content }}</span>
+              </div>
+              <div v-if="m.tools && m.tools.length" class="tools">
+                <span v-for="(t, ti) in m.tools" :key="ti" class="tool-chip">
+                  <i class="fas fa-magnifying-glass-chart"></i>
+                  {{ toolLabel(t) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 打字中 -->
+          <div v-if="loading" class="msg-row assistant">
+            <div class="avatar assistant"><img src="/images/logo_128.png" alt="AI" /></div>
+            <div class="msg-body">
+              <div class="bubble assistant typing">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 输入区 -->
-      <div class="composer">
-        <input
-          v-model="input"
-          @keyup.enter="send"
-          :disabled="loading"
-          placeholder="问问你的账单，比如：这个月花最多的是什么？"
-        />
-        <button class="send-btn" @click="send" :disabled="loading || !input.trim()" title="发送">
-          <i class="fas fa-paper-plane"></i>
-        </button>
+        <!-- 输入区 -->
+        <div class="composer">
+          <input
+            v-model="input"
+            @keyup.enter="send"
+            :disabled="loading"
+            placeholder="问问你的账单，比如：最近半年每月支出趋势，画个图"
+          />
+          <button class="send-btn" @click="send" :disabled="loading || !input.trim()" title="发送">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -100,6 +135,7 @@ import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import api from '@/api/client'
+import AiChart from '@/components/AiChart.vue'
 
 const enabled = ref(true)
 const model = ref('')
@@ -108,11 +144,16 @@ const input = ref('')
 const loading = ref(false)
 const msgBox = ref(null)
 
+// 会话历史
+const chatId = ref(null)
+const chats = ref([])
+const showHistory = ref(false)
+
 const examples = [
   { q: '我这个月花最多的是什么？', icon: 'fas fa-ranking-star' },
-  { q: '最近三个月每月收入和支出趋势', icon: 'fas fa-chart-line' },
-  { q: '超过 1000 元的大额支出有哪些？', icon: 'fas fa-coins' },
-  { q: '今年餐饮一共花了多少？', icon: 'fas fa-utensils' }
+  { q: '最近半年每月支出趋势，画个折线图', icon: 'fas fa-chart-line' },
+  { q: '这个月各分类支出占比，来个饼图', icon: 'fas fa-chart-pie' },
+  { q: '超过 1000 元的大额支出有哪些？', icon: 'fas fa-coins' }
 ]
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -123,12 +164,34 @@ onMounted(async () => {
     enabled.value = s.enabled
     model.value = s.model || ''
   } catch (e) { enabled.value = false }
-  // 恢复本页会话内的历史(刷新即清,不持久化隐私对话)
+  if (enabled.value) refreshChats()
 })
 
+// ===== Markdown / 图表分段渲染 =====
 function render(text) {
   const html = marked.parse(text || '')
   return DOMPurify.sanitize(html, { FORBID_TAGS: ['style', 'script', 'iframe'], FORBID_ATTR: ['onerror', 'onclick'] })
+}
+
+// 把 assistant 内容按 ```chart 代码块切成 [md|chart] 段
+function segments(content) {
+  const out = []
+  const re = /```chart\s*\n?([\s\S]*?)```/g
+  let last = 0
+  let mt
+  while ((mt = re.exec(content || '')) !== null) {
+    if (mt.index > last) out.push({ md: true, text: content.slice(last, mt.index) })
+    try {
+      const spec = JSON.parse(mt[1])
+      if (spec && spec.type) out.push({ md: false, spec })
+      else out.push({ md: true, text: mt[0] })
+    } catch (e) {
+      out.push({ md: true, text: '```\n' + mt[1] + '\n```' })   // 非法 JSON 当代码块展示
+    }
+    last = re.lastIndex
+  }
+  if (last < (content || '').length) out.push({ md: true, text: content.slice(last) })
+  return out.length ? out : [{ md: true, text: content || '' }]
 }
 
 function toolLabel(t) {
@@ -139,14 +202,57 @@ function toolLabel(t) {
   return parts.join(' · ')
 }
 
+function shortTime(s) {
+  if (!s) return ''
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '-')
+  return s.startsWith(today.slice(0, 10)) ? s.slice(11, 16) : s.slice(5, 10)
+}
+
 async function scrollDown() {
   await nextTick()
   if (msgBox.value) msgBox.value.scrollTop = msgBox.value.scrollHeight
 }
 
-function quickAsk(q) { input.value = q; send() }
+// ===== 会话管理 =====
+async function refreshChats() {
+  try {
+    const r = await api.aiChats()
+    chats.value = r.chats || []
+  } catch (e) { /* ignore */ }
+}
 
-function clearChat() { messages.value = [] }
+function toggleHistory() {
+  showHistory.value = !showHistory.value
+  if (showHistory.value) refreshChats()
+}
+
+function newChat() {
+  chatId.value = null
+  messages.value = []
+  showHistory.value = false
+}
+
+async function loadChat(id) {
+  try {
+    const r = await api.aiChatGet(id)
+    chatId.value = id
+    messages.value = (r.chat.messages || []).map(m => ({ role: m.role, content: m.content, tools: m.tools }))
+    showHistory.value = false
+    scrollDown()
+  } catch (e) { /* ignore */ }
+}
+
+async function removeChat(c) {
+  if (!confirm(`删除对话「${c.title}」？`)) return
+  try {
+    await api.aiChatDelete(c.id)
+    if (c.id === chatId.value) newChat()
+    await refreshChats()
+  } catch (e) { /* ignore */ }
+}
+
+// ===== 发送 =====
+function quickAsk(q) { input.value = q; send() }
 
 async function send() {
   const q = input.value.trim()
@@ -156,12 +262,13 @@ async function send() {
   loading.value = true
   scrollDown()
   try {
-    const history = messages.value
-      .filter(m => !m.error)
-      .slice(-7, -1)
+    const history = chatId.value ? undefined : messages.value
+      .filter(m => !m.error).slice(-7, -1)
       .map(m => ({ role: m.role, content: m.content }))
-    const r = await api.aiChat(q, history)
+    const r = await api.aiChat(q, history, chatId.value)
+    if (r.chat_id) chatId.value = r.chat_id
     messages.value.push({ role: 'assistant', content: r.answer, tools: r.tool_calls })
+    refreshChats()
   } catch (e) {
     messages.value.push({ role: 'assistant', content: '出错了：' + (e.message || '调用失败'), error: true })
   } finally {
@@ -174,7 +281,7 @@ async function send() {
 <style scoped>
 .ai-page {
   padding: 24px;
-  max-width: 920px;
+  max-width: 1080px;
   margin: 0 auto;
   height: 100vh;
   display: flex;
@@ -203,7 +310,7 @@ async function send() {
   padding: 7px 14px; border-radius: 18px; font-size: 13px; cursor: pointer; text-decoration: none;
   transition: all .15s;
 }
-.ghost-btn:hover { border-color: #007AFF; color: #007AFF; }
+.ghost-btn:hover, .ghost-btn.on { border-color: #007AFF; color: #007AFF; }
 
 /* ===== 卡片 ===== */
 .card { background: #fff; border: 1px solid #ebebf0; border-radius: 18px; box-shadow: 0 2px 12px rgba(0,0,0,.04); }
@@ -218,8 +325,39 @@ async function send() {
   padding: 10px 26px; border-radius: 12px; font-size: 14px;
 }
 
+/* ===== 主体布局 ===== */
+.ai-body { flex: 1; display: flex; gap: 14px; min-height: 0; }
+
+/* 历史侧栏 */
+.history-panel { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; }
+.history-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid #f0f0f3;
+  font-size: 14px; font-weight: 500; color: #1d1d1f;
+}
+.hclose { border: none; background: none; color: #b3b8bf; cursor: pointer; }
+.hclose:hover { color: #6e6e73; }
+.history-list { flex: 1; overflow-y: auto; padding: 8px; }
+.history-empty { color: #b3b8bf; font-size: 12.5px; text-align: center; padding: 30px 0; }
+.history-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 11px; border-radius: 10px; cursor: pointer; transition: background .12s;
+}
+.history-item:hover { background: #f5f7fa; }
+.history-item.active { background: #eaf3ff; }
+.hi-main { flex: 1; min-width: 0; }
+.hi-title { display: block; font-size: 13px; color: #1d1d1f; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-item.active .hi-title { color: #007AFF; font-weight: 500; }
+.hi-meta { font-size: 11px; color: #9aa0a6; }
+.hi-del { border: none; background: none; color: transparent; cursor: pointer; font-size: 12px; padding: 4px; }
+.history-item:hover .hi-del { color: #c9ced6; }
+.hi-del:hover { color: #ff3b30 !important; }
+
+.slide-enter-active, .slide-leave-active { transition: all .18s ease; }
+.slide-enter-from, .slide-leave-to { opacity: 0; transform: translateX(-12px); width: 0; }
+
 /* ===== 对话 ===== */
-.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.chat { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .messages { flex: 1; overflow-y: auto; padding: 24px; }
 
 /* 欢迎态 */
@@ -251,8 +389,9 @@ async function send() {
 .avatar.assistant { background: linear-gradient(135deg, #eaf3ff, #f3ebff); border: 1px solid #e8eef8; }
 .avatar.assistant img { width: 26px; height: 26px; object-fit: contain; }
 .avatar.user { background: linear-gradient(135deg, #007AFF, #4DA3FF); color: #fff; font-size: 13px; }
-.msg-body { max-width: 78%; min-width: 0; display: flex; flex-direction: column; }
+.msg-body { max-width: 82%; min-width: 0; display: flex; flex-direction: column; }
 .msg-row.user .msg-body { align-items: flex-end; }
+.msg-row.assistant .msg-body { flex: 1; }
 
 .bubble { padding: 11px 15px; border-radius: 16px; font-size: 14px; line-height: 1.7; word-break: break-word; }
 .bubble.user {
@@ -323,4 +462,8 @@ async function send() {
 }
 .send-btn:hover:not(:disabled) { transform: scale(1.05); }
 .send-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+
+@media (max-width: 820px) {
+  .history-panel { position: absolute; z-index: 20; height: 70%; }
+}
 </style>

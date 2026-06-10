@@ -145,7 +145,10 @@ export const api = {
 
   // ==================== AI ====================
   aiStatus: () => get('/ai/status'),
-  aiChat: (question, history) => post('/ai/chat', { question, history }),
+  aiChat: (question, history, chat_id) => post('/ai/chat', { question, history, chat_id }),
+  aiChats: () => get('/ai/chats'),
+  aiChatGet: (id) => get(`/ai/chats/${id}`),
+  aiChatDelete: (id) => delete_(`/ai/chats/${id}`),
   aiRecognize: (formData) => post('/ai/recognize', formData),
   aiRecognizeText: (text, hint) => post('/ai/recognize', { text, hint }),
   aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name }),
