@@ -1,18 +1,35 @@
 <template>
   <div class="networth-page">
-    <!-- 页头 -->
+    <!-- 页头 + 子页签 -->
     <div class="page-header">
       <div>
         <h1 class="page-title">资产负债</h1>
-        <p class="page-sub">资产是存量，流水是流量 —— 净资产只能靠定期记录各账户余额（快照），流水用来解释变化。</p>
+        <p class="page-sub">资产是存量，流水是流量 —— 净资产靠余额快照，收入是它的进水口。</p>
       </div>
-      <button
-        class="primary-btn"
-        :disabled="!data || !data.accounts.length"
-        @click="toggleForm"
-      ><i class="fas fa-plus"></i> 记一笔快照</button>
+      <div class="header-right">
+        <div class="nw-tabs">
+          <button class="nw-tab" :class="{ active: tab === 'sheet' }" @click="tab = 'sheet'">
+            <i class="fas fa-scale-balanced"></i> 资产负债表
+          </button>
+          <button class="nw-tab" :class="{ active: tab === 'income' }" @click="tab = 'income'">
+            <i class="fas fa-sack-dollar"></i> 收入分析
+          </button>
+        </div>
+        <button
+          v-if="tab === 'sheet'"
+          class="primary-btn"
+          :disabled="!data || !data.accounts.length"
+          @click="toggleForm"
+        ><i class="fas fa-plus"></i> 记一笔快照</button>
+      </div>
     </div>
 
+    <!-- 收入分析子页(keep-alive 保活) -->
+    <keep-alive>
+      <IncomeView v-if="tab === 'income'" />
+    </keep-alive>
+
+    <div v-show="tab === 'sheet'">
     <div v-if="loading" class="state-box">数据加载中…</div>
     <div v-else-if="error" class="state-box error">{{ error }}</div>
 
@@ -183,16 +200,32 @@
         </div>
       </div>
     </template>
+    </div><!-- /v-show sheet -->
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import api from '@/api/client'
 import { useUiStore } from '@/stores/ui'
+import IncomeView from './Income.vue'
 
 const ui = useUiStore()
+
+// 子页签:sheet=资产负债表 / income=收入分析(URL ?tab= 同步,可直链)
+const route = useRoute()
+const router = useRouter()
+const tab = ref(route.query.tab === 'income' ? 'income' : 'sheet')
+watch(tab, async (v) => {
+  if (route.query.tab !== v) router.replace({ path: '/networth', query: v === 'sheet' ? {} : { tab: v } })
+  if (v === 'sheet') { await nextTick(); resize() }   // 隐藏期 init 的图表尺寸为 0,回来补一次
+})
+watch(() => route.query.tab, (v) => {
+  const want = v === 'income' ? 'income' : 'sheet'
+  if (want !== tab.value) tab.value = want
+})
 
 const loading = ref(true)
 const error = ref('')
@@ -444,6 +477,21 @@ onUnmounted(() => {
 
 <style scoped>
 .networth-page { max-width: 1200px; margin: 0 auto; }
+
+/* 子页签 */
+.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nw-tabs {
+  display: flex; gap: 4px; background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #ecedf1); border-radius: 12px; padding: 4px;
+}
+.nw-tab {
+  display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px;
+  border: none; background: none; color: #5a5a60; font-size: 13.5px; font-weight: 500;
+  border-radius: 9px; cursor: pointer; transition: all .15s;
+}
+.nw-tab i { font-size: 13px; opacity: .85; }
+.nw-tab:hover { background: #f3f5f9; color: #34C759; }
+.nw-tab.active { background: #34C759; color: #fff; box-shadow: 0 4px 12px rgba(52,199,89,.22); }
 
 .page-header {
   display: flex; justify-content: space-between; align-items: flex-start;

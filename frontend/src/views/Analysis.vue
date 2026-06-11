@@ -31,12 +31,10 @@ import Category from './Category.vue'
 import Time from './Time.vue'
 import Channels from './Channels.vue'
 import Reconcile from './Reconcile.vue'
-import Income from './Income.vue'
 
 const tabs = [
   { key: 'yearly', label: '年度总览', icon: 'fas fa-calendar-alt', comp: Yearly, scope: 'yearly' },
   { key: 'monthly', label: '月度分析', icon: 'fas fa-chart-line', comp: Monthly, scope: 'monthly' },
-  { key: 'income', label: '收入分析', icon: 'fas fa-sack-dollar', comp: Income, scope: 'income' },
   { key: 'category', label: '分类分析', icon: 'fas fa-tags', comp: Category, scope: 'category' },
   { key: 'time', label: '时间分析', icon: 'fas fa-clock', comp: Time, scope: 'time' },
   { key: 'channels', label: '渠道分析', icon: 'fas fa-credit-card', comp: Channels, scope: 'channel' },

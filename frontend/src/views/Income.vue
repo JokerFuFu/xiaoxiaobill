@@ -20,6 +20,9 @@
       </div>
     </div>
 
+    <!-- AI 智能分析(收入顾问视角) -->
+    <AiAnalysisPanel scope="income" />
+
     <div v-if="loading" class="state-box">数据加载中…</div>
     <div v-else-if="error" class="state-box error">{{ error }}</div>
     <div v-else-if="!data || data.empty" class="state-box">暂无账单数据，请先在「设置」上传账单，再来看收入分析。</div>
@@ -247,6 +250,7 @@ import { ref, computed, onMounted, onUnmounted, onActivated, nextTick } from 'vu
 import * as echarts from 'echarts'
 import api from '@/api/client'
 import { useUiStore } from '@/stores/ui'
+import AiAnalysisPanel from '@/components/AiAnalysisPanel.vue'
 
 defineOptions({ name: 'Income' })
 
