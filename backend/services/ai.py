@@ -9,20 +9,37 @@ import json
 import logging
 import os
 import re
+import secrets
 import threading
 
 import pandas as pd
 import requests
 
-from config import AI_BASE_URL, AI_API_KEY, AI_MODEL, UPLOAD_FOLDER
+from config import AI_BASE_URL, AI_API_KEY, AI_MODEL, AI_ENABLED, UPLOAD_FOLDER
+
+AI_ENABLED_ENV = bool(AI_ENABLED)
 
 logger = logging.getLogger(__name__)
 _cfg_lock = threading.RLock()
 
 VALID_TYPES = ['收入', '支出', '转入', '转出', '不计收支']
 
+# 可按功能分别指定模型的「用途」(不是每个模型都有多模态识别能力,故分开)
+PURPOSES = ('chat', 'recognize', 'analysis')
+PURPOSE_LABELS = {'chat': '对话助手', 'recognize': '账单识别', 'analysis': '智能分析'}
+MAX_PROFILES = 12
 
-# ============ 每用户模型配置(存 upload/<uid>/_ai_config.json,回落 env 默认) ============
+
+# ============ 每用户模型配置 ============
+# 存 upload/<uid>/_ai_config.json。新结构:
+#   {
+#     "profiles": [{"id","name","base_url","api_key","model"}],   # 多套模型配置档案
+#     "assignments": {"chat": "<pid|''>", "recognize": "...", "analysis": "..."},  # 功能→档案
+#     "default_profile": "<pid|''>",   # 未单独指定时用的默认档案
+#     "custom_providers": [{"name","base_url","model"}],   # 自定义供应商模板(无 key)
+#     "auto_analyze": true             # AI 智能分析每月自动触发
+#   }
+# 兼容旧结构(顶层 base_url/api_key/model)→自动迁移成一个名为「默认配置」的档案。
 def _cfg_file(uid):
     return os.path.join(UPLOAD_FOLDER, uid, '_ai_config.json')
 
@@ -38,56 +55,211 @@ def _load_user_cfg(uid):
     return {}
 
 
-def get_ai_config(uid):
-    """返回该用户生效的 AI 配置 {base_url, api_key, model, source, custom_providers}。
-    用户自定义优先;否则回落环境变量默认(若部署方配置了)。"""
-    custom = _load_user_cfg(uid)
-    providers = custom.get('custom_providers') or []
-    if custom.get('api_key'):
+def _new_pid():
+    return 'p' + secrets.token_hex(4)
+
+
+def _norm_profile(p, allow_new_id=True):
+    """规范化单个档案;返回 dict 或 None。"""
+    if not isinstance(p, dict):
+        return None
+    pid = str(p.get('id') or '').strip()[:40]
+    if not pid and allow_new_id:
+        pid = _new_pid()
+    if not pid:
+        return None
+    return {
+        'id': pid,
+        'name': (str(p.get('name', '')).strip() or '未命名')[:24],
+        'base_url': str(p.get('base_url', '')).strip()[:200],
+        'api_key': str(p.get('api_key', '') or ''),
+        'model': str(p.get('model', '')).strip()[:80],
+    }
+
+
+def _normalized(uid):
+    """读取并规范化用户配置(含迁移)。返回完整结构(profiles 含明文 key,仅服务端内部用)。"""
+    raw = _load_user_cfg(uid)
+    if not isinstance(raw, dict):
+        raw = {}
+    profiles_raw = raw.get('profiles')
+    if not isinstance(profiles_raw, list):
+        profiles_raw = []
+        # 迁移旧版单配置
+        if raw.get('api_key') or raw.get('base_url') or raw.get('model'):
+            profiles_raw = [{
+                'id': 'default', 'name': '默认配置',
+                'base_url': raw.get('base_url', ''),
+                'api_key': raw.get('api_key', ''),
+                'model': raw.get('model', ''),
+            }]
+    profiles = []
+    seen = set()
+    for p in profiles_raw[:MAX_PROFILES]:
+        np = _norm_profile(p)
+        if np and np['id'] not in seen:
+            seen.add(np['id'])
+            profiles.append(np)
+
+    pids = {p['id'] for p in profiles}
+    assignments_raw = raw.get('assignments') if isinstance(raw.get('assignments'), dict) else {}
+    assignments = {}
+    for k in PURPOSES:
+        v = str(assignments_raw.get(k, '') or '').strip()
+        assignments[k] = v if v in pids else ''
+
+    default_profile = str(raw.get('default_profile', '') or '').strip()
+    if default_profile not in pids:
+        default_profile = profiles[0]['id'] if profiles else ''
+
+    cps = []
+    for cp in (raw.get('custom_providers') or [])[:20]:
+        if not isinstance(cp, dict):
+            continue
+        name = str(cp.get('name', '')).strip()[:20]
+        burl = str(cp.get('base_url', '')).strip()
+        if name and burl.startswith(('http://', 'https://')):
+            cps.append({'name': name, 'base_url': burl, 'model': str(cp.get('model', '')).strip()[:80]})
+
+    return {
+        'profiles': profiles,
+        'assignments': assignments,
+        'default_profile': default_profile,
+        'custom_providers': cps,
+        'auto_analyze': bool(raw.get('auto_analyze', True)),
+    }
+
+
+def _save_normalized(uid, cfg):
+    p = _cfg_file(uid)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, p)
+    try:
+        os.chmod(p, 0o600)   # 含 key,仅属主可读
+    except Exception:
+        pass
+
+
+def get_ai_config(uid, purpose='chat'):
+    """返回该用户某功能(purpose)生效的 AI 配置 {base_url, api_key, model, source, ...}。
+    功能分配优先 → 默认档案 → 环境变量默认(若部署方配置了)。"""
+    cfg = _normalized(uid)
+    profiles = cfg['profiles']
+    pid = cfg['assignments'].get(purpose, '') or cfg['default_profile']
+    prof = next((p for p in profiles if p['id'] == pid), None)
+    if prof is None and profiles:
+        prof = profiles[0]
+    if prof and prof.get('api_key'):
         return {
-            'base_url': (custom.get('base_url') or AI_BASE_URL).rstrip('/'),
-            'api_key': custom['api_key'],
-            'model': custom.get('model') or AI_MODEL,
+            'base_url': (prof['base_url'] or AI_BASE_URL).rstrip('/'),
+            'api_key': prof['api_key'],
+            'model': prof['model'] or AI_MODEL,
             'source': 'custom',
-            'custom_providers': providers,
+            'profile_id': prof['id'],
+            'profile_name': prof['name'],
+            'custom_providers': cfg['custom_providers'],
         }
     return {'base_url': AI_BASE_URL, 'api_key': AI_API_KEY, 'model': AI_MODEL,
-            'source': 'default', 'custom_providers': providers}
+            'source': 'default', 'profile_id': None, 'profile_name': None,
+            'custom_providers': cfg['custom_providers']}
 
 
-def save_ai_config(uid, base_url=None, api_key=None, model=None, custom_providers=None):
-    """保存用户配置。api_key: None=不改 / ''=清除自己的key(回落默认) / 其他=新key。
-    custom_providers: None=不改 / list=整体替换(自定义供应商列表,与 key 互不影响)。"""
+def public_config(uid):
+    """对前端可见的配置:key 一律掩码,绝不下发明文。"""
+    cfg = _normalized(uid)
+    profiles = [{
+        'id': p['id'], 'name': p['name'], 'base_url': p['base_url'], 'model': p['model'],
+        'has_key': bool(p['api_key']), 'api_key_masked': mask_key(p['api_key']),
+    } for p in cfg['profiles']]
+    return {
+        'profiles': profiles,
+        'assignments': cfg['assignments'],
+        'default_profile': cfg['default_profile'],
+        'custom_providers': cfg['custom_providers'],
+        'auto_analyze': cfg['auto_analyze'],
+        'purposes': [{'key': k, 'label': PURPOSE_LABELS[k]} for k in PURPOSES],
+        'has_default': AI_ENABLED_ENV,
+    }
+
+
+def upsert_profile(uid, profile):
+    """新增或更新一个档案。profile: {id?, name, base_url, model, api_key?}。
+    api_key: 缺省/None=保留旧值 / ''=清除 / 其他=替换。返回完整(明文)结构。"""
     with _cfg_lock:
-        p = _cfg_file(uid)
-        old = _load_user_cfg(uid)
-        new = {
-            'base_url': (base_url if base_url is not None else old.get('base_url', '')).strip(),
-            'api_key': ('' if api_key == '' else (api_key if api_key is not None else old.get('api_key', ''))),
-            'model': (model if model is not None else old.get('model', '')).strip(),
-            'custom_providers': custom_providers if custom_providers is not None else (old.get('custom_providers') or []),
-        }
-        # 规范化自定义供应商
-        cps = []
-        for cp in new['custom_providers'][:20]:
-            if not isinstance(cp, dict):
-                continue
-            name = str(cp.get('name', '')).strip()[:20]
-            burl = str(cp.get('base_url', '')).strip()
-            if name and burl.startswith(('http://', 'https://')):
-                cps.append({'name': name, 'base_url': burl, 'model': str(cp.get('model', '')).strip()[:60]})
-        new['custom_providers'] = cps
+        cfg = _normalized(uid)
+        pid = str((profile or {}).get('id') or '').strip()
+        incoming_key = profile.get('api_key', None) if isinstance(profile, dict) else None
+        existing = next((p for p in cfg['profiles'] if p['id'] == pid), None) if pid else None
+        if existing:
+            existing['name'] = (str(profile.get('name', existing['name'])).strip() or existing['name'])[:24]
+            existing['base_url'] = str(profile.get('base_url', existing['base_url'])).strip()[:200]
+            existing['model'] = str(profile.get('model', existing['model'])).strip()[:80]
+            if incoming_key is not None:
+                existing['api_key'] = '' if incoming_key == '' else str(incoming_key)
+            saved = existing
+        else:
+            if len(cfg['profiles']) >= MAX_PROFILES:
+                raise ValueError(f'模型配置档案最多 {MAX_PROFILES} 套')
+            np = _norm_profile({
+                'name': profile.get('name', ''), 'base_url': profile.get('base_url', ''),
+                'model': profile.get('model', ''), 'api_key': incoming_key or '',
+            })
+            cfg['profiles'].append(np)
+            saved = np
+            if not cfg['default_profile']:
+                cfg['default_profile'] = np['id']
+        _save_normalized(uid, cfg)
+        return saved['id'], public_config(uid)
 
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        tmp = p + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(new, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, p)
-        try:
-            os.chmod(p, 0o600)   # 含 key,仅属主可读
-        except Exception:
-            pass
-        return get_ai_config(uid)
+
+def delete_profile(uid, pid):
+    with _cfg_lock:
+        cfg = _normalized(uid)
+        cfg['profiles'] = [p for p in cfg['profiles'] if p['id'] != pid]
+        pids = {p['id'] for p in cfg['profiles']}
+        if cfg['default_profile'] == pid:
+            cfg['default_profile'] = cfg['profiles'][0]['id'] if cfg['profiles'] else ''
+        for k in PURPOSES:
+            if cfg['assignments'].get(k) == pid:
+                cfg['assignments'][k] = ''
+        _save_normalized(uid, cfg)
+        return public_config(uid)
+
+
+def save_routing(uid, assignments=None, default_profile=None, custom_providers=None, auto_analyze=None):
+    """保存功能分配/默认档案/自定义供应商模板/自动分析开关(不动档案与 key)。"""
+    with _cfg_lock:
+        cfg = _normalized(uid)
+        pids = {p['id'] for p in cfg['profiles']}
+        if isinstance(assignments, dict):
+            for k in PURPOSES:
+                if k in assignments:
+                    v = str(assignments.get(k, '') or '').strip()
+                    cfg['assignments'][k] = v if v in pids else ''
+        if default_profile is not None:
+            dp = str(default_profile or '').strip()
+            cfg['default_profile'] = dp if dp in pids else (cfg['profiles'][0]['id'] if cfg['profiles'] else '')
+        if custom_providers is not None and isinstance(custom_providers, list):
+            cps = []
+            for cp in custom_providers[:20]:
+                if not isinstance(cp, dict):
+                    continue
+                name = str(cp.get('name', '')).strip()[:20]
+                burl = str(cp.get('base_url', '')).strip()
+                if name and burl.startswith(('http://', 'https://')):
+                    cps.append({'name': name, 'base_url': burl, 'model': str(cp.get('model', '')).strip()[:80]})
+            cfg['custom_providers'] = cps
+        if auto_analyze is not None:
+            cfg['auto_analyze'] = bool(auto_analyze)
+        _save_normalized(uid, cfg)
+        return public_config(uid)
+
+
+def get_auto_analyze(uid):
+    return _normalized(uid)['auto_analyze']
 
 
 def mask_key(k):

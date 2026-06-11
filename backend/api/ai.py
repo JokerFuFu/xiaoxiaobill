@@ -18,6 +18,7 @@ from config import AI_ENABLED, AI_MODEL, AI_BASE_URL
 from utils.session import get_session_dir, get_current_uid
 from services.data_loader import load_alipay_data
 from services import ai as ai_svc
+from services import ai_analyze as analyze_svc
 from services import ai_chats as chat_svc
 from services import members as member_svc
 
@@ -29,79 +30,133 @@ def _uid():
     return get_current_uid() or '__anon__'
 
 
-def _cfg():
-    """当前用户生效的 AI 配置(自定义优先,回落 env 默认)。"""
-    return ai_svc.get_ai_config(_uid())
+def _cfg(purpose='chat'):
+    """当前用户某功能生效的 AI 配置(功能分配优先 → 默认档案 → env 默认)。"""
+    return ai_svc.get_ai_config(_uid(), purpose)
 
 
 @ai_bp.route('/api/ai/status')
 def ai_status():
-    cfg = _cfg()
+    cfg = _cfg('chat')
     enabled = bool(cfg.get('api_key'))
     return jsonify({'success': True, 'enabled': enabled,
                     'model': cfg['model'] if enabled else None,
                     'source': cfg['source']})
 
 
-def _require_ai():
-    if not _cfg().get('api_key'):
-        return jsonify({'success': False, 'error': 'AI 未配置,请到「设置 → AI 模型配置」填入 API Key'}), 503
+def _require_ai(purpose='chat'):
+    if not _cfg(purpose).get('api_key'):
+        return jsonify({'success': False, 'error': 'AI 未配置,请到「设置 → AI 与模型」选择/配置模型'}), 503
     return None
 
 
-# ============ 每用户模型配置 ============
+# ============ 每用户模型配置(档案 + 功能分配) ============
 @ai_bp.route('/api/ai/config', methods=['GET'])
 def get_config():
-    """只返回用户自己配置的内容;系统默认(若有)只给布尔标志,不泄露 Key/URL。"""
-    uid = _uid()
-    cfg = ai_svc.get_ai_config(uid)
-    user = ai_svc._load_user_cfg(uid)   # 用户自己存的(可能为空)
-    is_custom = cfg['source'] == 'custom'
-    return jsonify({'success': True, 'config': {
-        'base_url': user.get('base_url', ''),
-        'model': user.get('model', ''),
-        'api_key_masked': ai_svc.mask_key(cfg['api_key']) if is_custom else '',
-        'has_key': is_custom,                # 用户是否配了自己的 key
-        'source': cfg['source'],             # custom=用户自定义 / default=系统默认(若部署方设了env)
-        'has_default': AI_ENABLED,           # 系统是否有默认配置(不暴露内容)
-        'custom_providers': cfg.get('custom_providers') or [],
-    }})
+    """返回全部档案(key 掩码)、功能分配、默认档案、自定义供应商模板。绝不下发明文 Key。"""
+    return jsonify({'success': True, 'config': ai_svc.public_config(_uid())})
 
 
-@ai_bp.route('/api/ai/config', methods=['POST'])
-def save_config():
+@ai_bp.route('/api/ai/profiles', methods=['POST'])
+def upsert_profile():
+    """新增/更新一套模型配置档案。带 id=更新;不带=新增。api_key 缺省=保留,''=清除。"""
     data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
     base_url = (data.get('base_url') or '').strip()
-    model = (data.get('model') or '').strip()
-    api_key = data.get('api_key')   # None=不改 / ''=清除自己的key / 其他=新key
-    if api_key is not None:
-        api_key = api_key.strip()
-    custom_providers = data.get('custom_providers')   # None=不改 / list=整体替换
+    if not name:
+        return jsonify({'success': False, 'error': '请填写配置名称'}), 400
+    if base_url and not base_url.startswith(('http://', 'https://')):
+        return jsonify({'success': False, 'error': 'Base URL 需以 http(s):// 开头'}), 400
+    profile = {'id': data.get('id'), 'name': name, 'base_url': base_url,
+               'model': (data.get('model') or '').strip()}
+    if 'api_key' in data:           # 只有显式传了才动 key(支持 ''=清除)
+        profile['api_key'] = data.get('api_key')
+    try:
+        pid, cfg = ai_svc.upsert_profile(_uid(), profile)
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    return jsonify({'success': True, 'profile_id': pid, 'config': cfg})
+
+
+@ai_bp.route('/api/ai/profiles/<pid>', methods=['DELETE'])
+def delete_profile(pid):
+    return jsonify({'success': True, 'config': ai_svc.delete_profile(_uid(), pid)})
+
+
+@ai_bp.route('/api/ai/config', methods=['PUT'])
+def save_routing():
+    """保存功能分配/默认档案/自定义供应商模板/自动分析开关(不改档案与 key)。"""
+    data = request.get_json(silent=True) or {}
+    custom_providers = data.get('custom_providers')
     if custom_providers is not None and not isinstance(custom_providers, list):
         return jsonify({'success': False, 'error': 'custom_providers 须为数组'}), 400
-    if api_key and (base_url and not base_url.startswith(('http://', 'https://'))):
-        return jsonify({'success': False, 'error': 'Base URL 需以 http(s):// 开头'}), 400
-    cfg = ai_svc.save_ai_config(_uid(), base_url=base_url or None, api_key=api_key,
-                                model=model or None, custom_providers=custom_providers)
-    return jsonify({'success': True, 'source': cfg['source'],
-                    'api_key_masked': ai_svc.mask_key(cfg['api_key']) if cfg['source'] == 'custom' else '',
-                    'custom_providers': cfg.get('custom_providers') or []})
+    cfg = ai_svc.save_routing(_uid(),
+                              assignments=data.get('assignments'),
+                              default_profile=data.get('default_profile'),
+                              custom_providers=custom_providers,
+                              auto_analyze=data.get('auto_analyze'))
+    return jsonify({'success': True, 'config': cfg})
 
 
 @ai_bp.route('/api/ai/config/test', methods=['POST'])
 def test_config():
-    """测试连接:body 可带 base_url/api_key/model 直接试,缺省用已保存配置。"""
+    """测试连接:可直接给 base_url/api_key/model;或给档案 id(缺的字段回落该档案已存值)。"""
     data = request.get_json(silent=True) or {}
-    cfg = ai_svc.get_ai_config(_uid())
-    test = {
-        'base_url': (data.get('base_url') or cfg['base_url']).strip().rstrip('/'),
-        'api_key': (data.get('api_key') or '').strip() or cfg['api_key'],
-        'model': (data.get('model') or cfg['model']).strip(),
-    }
-    if not test['api_key']:
-        return jsonify({'success': False, 'error': '没有可用的 API Key'}), 400
-    ok, msg = ai_svc.test_ai_config(test)
+    test_key = (data.get('api_key') or '').strip()
+    test_base = (data.get('base_url') or '').strip().rstrip('/')
+    test_model = (data.get('model') or '').strip()
+    pid = (data.get('id') or data.get('profile_id') or '').strip()
+    if pid:
+        prof = next((p for p in ai_svc._normalized(_uid())['profiles'] if p['id'] == pid), None)
+        if prof:
+            test_key = test_key or prof['api_key']
+            test_base = test_base or (prof['base_url'] or '').rstrip('/')
+            test_model = test_model or prof['model']
+    if not test_key:
+        return jsonify({'success': False, 'error': '没有可用的 API Key(新档案请先填 Key 再测)'}), 400
+    if not test_base:
+        return jsonify({'success': False, 'error': '请填写 Base URL'}), 400
+    ok, msg = ai_svc.test_ai_config({'base_url': test_base, 'api_key': test_key, 'model': test_model})
     return jsonify({'success': True, 'ok': ok, 'message': msg})
+
+
+# ============ AI 智能分析(各分析维度的洞察报告) ============
+@ai_bp.route('/api/ai/analyze', methods=['GET'])
+def get_analysis_report():
+    """取某维度已缓存的分析报告(不触发生成)。"""
+    scope = (request.args.get('scope') or '').strip()
+    year = request.args.get('year', type=int)
+    month = request.args.get('month', type=int)
+    rec = analyze_svc.get_cached(_uid(), scope, year, month)
+    return jsonify({'success': True, 'report': rec,
+                    'auto': ai_svc.get_auto_analyze(_uid()),
+                    'enabled': bool(_cfg('analysis').get('api_key'))})
+
+
+@ai_bp.route('/api/ai/analyze', methods=['POST'])
+def run_analysis_report():
+    """生成(或取缓存)某维度的 AI 分析报告。{scope, year?, month?, force?}"""
+    err = _require_ai('analysis')
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    scope = (data.get('scope') or '').strip()
+    if scope not in analyze_svc.SCOPES:
+        return jsonify({'success': False, 'error': '未知分析维度'}), 400
+    try:
+        df = load_alipay_data()
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': '当前账号还没有账单数据,请先上传'}), 400
+    try:
+        rec = analyze_svc.generate(_uid(), df, scope,
+                                   year=data.get('year'), month=data.get('month'),
+                                   force=bool(data.get('force')), cfg=_cfg('analysis'))
+    except (ValueError, RuntimeError) as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        logger.exception("AI 智能分析失败")
+        return jsonify({'success': False, 'error': f'分析失败: {e}'}), 500
+    return jsonify({'success': True, 'report': rec})
 
 
 @ai_bp.route('/api/ai/chat', methods=['POST'])
@@ -211,7 +266,7 @@ def _extract_text(file_storage):
 
 @ai_bp.route('/api/ai/recognize', methods=['POST'])
 def recognize():
-    err = _require_ai()
+    err = _require_ai('recognize')
     if err:
         return err
     hint = request.form.get('hint', '') if request.form else ''
@@ -225,7 +280,7 @@ def recognize():
             hint = hint or data.get('hint', '')
         if not (text or '').strip():
             return jsonify({'success': False, 'error': '没有可识别的内容'}), 400
-        rows = ai_svc.recognize_bill(text, hint, cfg=_cfg())
+        rows = ai_svc.recognize_bill(text, hint, cfg=_cfg('recognize'))
     except ValueError as e:
         return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
@@ -239,7 +294,7 @@ _ALIPAY_HDR = "交易时间,交易分类,交易对方,对方账号,商品说明,
 
 @ai_bp.route('/api/ai/recognize/import', methods=['POST'])
 def recognize_import():
-    err = _require_ai()
+    err = _require_ai('recognize')
     if err:
         return err
     data = request.get_json(silent=True) or {}

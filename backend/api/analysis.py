@@ -102,27 +102,36 @@ def member_analysis():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# 综合分析结果缓存(消费洞察页很重,~20 项分析)。键含数据签名,文件变即失效。
+_analysis_result_cache = {}
+_ANALYSIS_CACHE_MAX = 16
+
+
 @analysis_bp.route('/api/analysis')
 def get_analysis():
     """综合分析 API"""
     try:
-        df = load_alipay_data()
+        from services import data_loader as _dl
+        from utils.session import get_current_uid
 
         year = request.args.get('year', type=int)
-        if year:
-            df = df[df['交易时间'].dt.year == year]
-
         min_amount = request.args.get('min_amount', type=float)
         max_amount = request.args.get('max_amount', type=float)
 
+        sig = _dl.current_data_signature()
+        ckey = (get_current_uid() or '__anon__', sig, year, min_amount, max_amount)
+        if sig is not None and ckey in _analysis_result_cache:
+            return jsonify({'success': True, 'data': _analysis_result_cache[ckey]})
+
+        df = load_alipay_data()
+        if year:
+            df = df[df['交易时间'].dt.year == year]
         if min_amount:
             df = df[df['金额'] >= min_amount]
         if max_amount:
             df = df[df['金额'] < max_amount]
 
-        return jsonify({
-            'success': True,
-            'data': {
+        data = {
                 'merchant_analysis': analyze_merchants(df),
                 'scenario_analysis': analyze_scenarios(df),
                 'habit_analysis': analyze_habits(df),
@@ -148,8 +157,13 @@ def get_analysis():
                 'boxplot_data': generate_boxplot_data(df),
                 'heatmap_data': generate_heatmap_data(df),
                 'pareto_data': generate_pareto_data(df)
-            }
-        })
+        }
+
+        if sig is not None:
+            _analysis_result_cache[ckey] = data
+            if len(_analysis_result_cache) > _ANALYSIS_CACHE_MAX:
+                _analysis_result_cache.pop(next(iter(_analysis_result_cache)))
+        return jsonify({'success': True, 'data': data})
 
     except Exception as e:
         logger.error(f"Analysis error: {str(e)}")

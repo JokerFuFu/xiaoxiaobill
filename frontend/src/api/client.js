@@ -154,8 +154,12 @@ export const api = {
   aiRecognizeText: (text, hint) => post('/ai/recognize', { text, hint }),
   aiRecognizeImport: (rows, member_id, name) => post('/ai/recognize/import', { rows, member_id, name }),
   aiGetConfig: () => get('/ai/config'),
-  aiSaveConfig: (payload) => post('/ai/config', payload),
-  aiTestConfig: (payload) => post('/ai/config/test', payload || {})
+  aiUpsertProfile: (payload) => post('/ai/profiles', payload),       // 新增/更新模型档案
+  aiDeleteProfile: (pid) => delete_(`/ai/profiles/${pid}`),
+  aiSaveRouting: (payload) => put('/ai/config', payload),            // 功能分配/默认档案/自定义供应商/自动分析
+  aiTestConfig: (payload) => post('/ai/config/test', payload || {}),
+  aiAnalyzeGet: (params) => get('/ai/analyze', params),             // 取缓存的智能分析
+  aiAnalyzeRun: (payload) => post('/ai/analyze', payload)           // 触发生成智能分析
 }
 
 // 401 未登录 → 跳登录页(登录页本身不跳,避免循环)

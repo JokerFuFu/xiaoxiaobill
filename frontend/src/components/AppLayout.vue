@@ -33,22 +33,22 @@
           <i class="fas fa-home icon-home"></i>
           <span>首页</span>
         </router-link>
-        <router-link to="/yearly" class="nav-item" :class="{ active: $route.path === '/yearly' }">
-          <i class="fas fa-calendar-alt icon-yearly"></i>
-          <span>年度总览</span>
-        </router-link>
-        <router-link to="/monthly" class="nav-item" :class="{ active: $route.path === '/monthly' }">
-          <i class="fas fa-chart-line icon-monthly"></i>
-          <span>月度分析</span>
-        </router-link>
-        <router-link to="/category" class="nav-item" :class="{ active: $route.path === '/category' }">
-          <i class="fas fa-tags icon-category"></i>
-          <span>分类分析</span>
-        </router-link>
-        <router-link to="/time" class="nav-item" :class="{ active: $route.path === '/time' }">
-          <i class="fas fa-clock icon-time"></i>
-          <span>时间分析</span>
-        </router-link>
+        <!-- 数据分析(二级菜单) -->
+        <div class="nav-group">
+          <button class="nav-item nav-parent" :class="{ active: $route.path === '/analysis' }" @click="toggleAnalysis">
+            <i class="fas fa-chart-pie icon-analysis"></i>
+            <span>数据分析</span>
+            <i class="fas fa-chevron-down nav-caret" :class="{ open: analysisOpen }"></i>
+          </button>
+          <div class="subnav" v-show="analysisOpen || $route.path === '/analysis'">
+            <router-link
+              v-for="s in analysisTabs" :key="s.key"
+              :to="`/analysis?tab=${s.key}`"
+              class="subnav-item"
+              :class="{ active: $route.path === '/analysis' && currentTab === s.key }"
+            >{{ s.label }}</router-link>
+          </div>
+        </div>
         <router-link to="/insights" class="nav-item" :class="{ active: $route.path === '/insights' }">
           <i class="fas fa-lightbulb icon-insights"></i>
           <span>消费洞察</span>
@@ -60,10 +60,6 @@
         <router-link to="/transfers" class="nav-item" :class="{ active: $route.path === '/transfers' }">
           <i class="fas fa-exchange-alt icon-transfers"></i>
           <span>转账记录</span>
-        </router-link>
-        <router-link to="/channels" class="nav-item" :class="{ active: $route.path === '/channels' }">
-          <i class="fas fa-credit-card icon-channels"></i>
-          <span>渠道分析</span>
         </router-link>
         <router-link to="/ai" class="nav-item" :class="{ active: $route.path === '/ai' }">
           <i class="fas fa-robot icon-ai"></i>
@@ -134,8 +130,8 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUiStore } from '@/stores/ui'
 import { useSessionStore } from '@/stores/session'
 import { useFilterStore } from '@/stores/filter'
@@ -148,6 +144,26 @@ const sessionStore = useSessionStore()
 const filterStore = useFilterStore()
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+// 「数据分析」二级菜单
+const analysisTabs = [
+  { key: 'yearly', label: '年度总览' },
+  { key: 'monthly', label: '月度分析' },
+  { key: 'category', label: '分类分析' },
+  { key: 'time', label: '时间分析' },
+  { key: 'channels', label: '渠道分析' },
+]
+const analysisOpen = ref(route.path === '/analysis')
+const currentTab = computed(() => route.query.tab || 'yearly')
+function toggleAnalysis() {
+  if (route.path !== '/analysis') {
+    router.push('/analysis')
+    analysisOpen.value = true
+  } else {
+    analysisOpen.value = !analysisOpen.value
+  }
+}
 
 async function onLogout() {
   if (!confirm('确定退出登录吗？')) return
@@ -312,6 +328,26 @@ onMounted(async () => {
 .icon-channels { color: #FF9500; }
 .icon-settings { color: #8E8E93; }
 .icon-author { color: #FF2D55; }
+.icon-analysis { color: #5856D6; }
+
+/* 数据分析:二级菜单 */
+.nav-group { display: flex; flex-direction: column; }
+.nav-parent {
+  width: calc(100% - 16px);
+  font-family: inherit; background: none; border: none; text-align: left; cursor: pointer;
+}
+.nav-parent .nav-caret {
+  margin-left: auto; margin-right: 0; width: auto; font-size: 11px; color: #b0b0b8;
+  transition: transform .2s;
+}
+.nav-parent .nav-caret.open { transform: rotate(180deg); }
+.subnav { display: flex; flex-direction: column; margin: 0 8px 4px 8px; }
+.subnav-item {
+  display: block; padding: 9px 20px 9px 48px; margin: 1px 0; border-radius: var(--radius-sm);
+  color: var(--secondary-text, #86868b); text-decoration: none; font-size: 13.5px; transition: all .2s;
+}
+.subnav-item:hover { background: var(--hover-bg); color: var(--primary-color); }
+.subnav-item.active { background: var(--hover-bg); color: var(--primary-color); font-weight: 500; }
 
 .content {
   flex: 1;

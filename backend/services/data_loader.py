@@ -4,6 +4,7 @@
 import pandas as pd
 import logging
 import os
+import threading
 
 from datetime import timedelta
 
@@ -72,28 +73,80 @@ def load_demo_data():
     return df
 
 
+_df_cache = {}
+_df_cache_lock = threading.Lock()
+_MEMBER_FILES = ('_members.json', '_file_members.json')   # 影响「成员」列,纳入缓存签名
+
+
+def _data_signature(session_dir):
+    """数据文件 + 成员映射文件的 (名, mtime, 大小);任一变化即缓存失效。无数据则抛 FileNotFoundError。"""
+    parts, has_data = [], False
+    for fn in sorted(os.listdir(session_dir)):
+        fp = os.path.join(session_dir, fn)
+        if not os.path.isfile(fp):
+            continue
+        is_data = fn.endswith('.csv') or fn.endswith('.xlsx') or fn.lower().endswith('.pdf')
+        if is_data:
+            has_data = True
+        if is_data or fn in _MEMBER_FILES:
+            try:
+                st = os.stat(fp)
+                parts.append((fn, int(st.st_mtime_ns), st.st_size))
+            except OSError:
+                pass
+    if not has_data:
+        raise FileNotFoundError("未找到任何支付宝(.csv)/微信(.xlsx)/银行(.pdf)账单文件")
+    return tuple(parts)
+
+
 def load_alipay_data():
     """
-    加载并合并所有账单数据
+    加载并合并所有账单数据。
+
+    进程内按「文件签名(mtime+大小)」缓存:文件未变直接返回缓存副本(约毫秒级),
+    避免每次请求都重新解析/合并/去重所有账单(原先每次 ~2-3s)。上传/删除/改成员归属
+    都会改变签名而自动失效。
 
     Returns:
         pandas.DataFrame: 合并后的数据框
-
     Raises:
         FileNotFoundError: 未找到任何账单文件
-        Exception: 加载失败时抛出异常
     """
-    try:
-        # 演示模式逻辑
-        if session.get('is_demo'):
-            return load_demo_data()
+    if session.get('is_demo'):
+        return load_demo_data()
 
-        session_dir = get_session_dir()
+    session_dir = get_session_dir()
+    uid = os.path.basename(session_dir)
+    sig = _data_signature(session_dir)   # 无数据会抛 FileNotFoundError
+
+    with _df_cache_lock:
+        hit = _df_cache.get(uid)
+        if hit is not None and hit[0] == sig:
+            return hit[1].copy()
+
+    df = _build_alipay_data(session_dir, uid)
+    with _df_cache_lock:
+        _df_cache[uid] = (sig, df)
+    return df.copy()
+
+
+def current_data_signature():
+    """当前用户数据的签名(供上层做结果缓存)。无数据/演示态返回 None。"""
+    if session.get('is_demo'):
+        return None
+    try:
+        return _data_signature(get_session_dir())
+    except Exception:
+        return None
+
+
+def _build_alipay_data(session_dir, uid):
+    """真正解析并合并所有账单(无缓存)。"""
+    try:
         all_data = []
 
         # 成员维度:解析每个文件后,按 文件→成员 映射盖上「成员」列(整份文件归一个成员)
         from services.members import get_file_member_map, member_name_map, default_member_id
-        uid = os.path.basename(session_dir)
         try:
             file_member = get_file_member_map(uid)
             name_map = member_name_map(uid)
@@ -177,17 +230,18 @@ def load_alipay_data():
 
 def clear_data_cache():
     """
-    清除数据缓存
+    显式清除当前用户的内存数据缓存。
+
+    注:缓存本身按文件签名自动失效,上传/删除已会自动重建;此处用于强制清除(如换数据)。
 
     Returns:
         bool: 清除成功返回 True
     """
-    from utils.session import user_cache
-
-    if 'user_id' in session:
-        user_id = session['user_id']
-        # 获取 load_alipay_data 函数的 clear_cache 方法
-        if hasattr(load_alipay_data, 'clear_cache'):
-            load_alipay_data.clear_cache(user_id)
-        return True
+    try:
+        uid = os.path.basename(get_session_dir())
+        with _df_cache_lock:
+            _df_cache.pop(uid, None)
+    except Exception:
+        pass
+    return True
     return False
