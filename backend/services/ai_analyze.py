@@ -16,10 +16,10 @@ from services import ai as ai_svc
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ('yearly', 'monthly', 'category', 'time', 'channel', 'reconcile')
+SCOPES = ('yearly', 'monthly', 'category', 'time', 'channel', 'reconcile', 'income')
 SCOPE_LABELS = {
     'yearly': '年度总览', 'monthly': '月度分析', 'category': '分类分析',
-    'time': '时间分析', 'channel': '渠道分析', 'reconcile': '对账中心',
+    'time': '时间分析', 'channel': '渠道分析', 'reconcile': '对账中心', 'income': '收入分析',
 }
 MAX_REPORTS = 40
 
@@ -167,6 +167,24 @@ def build_summary(df, scope, year, month):
             'top分类': _top_cat(ydf, 8),
         }
 
+    if scope == 'income':
+        try:
+            from services import income as income_svc
+            rep = income_svc.full_report(df, year)
+            sal = rep['salary']
+            return year, None, f"{year} 年", {
+                '收入总览': rep['overview'],
+                '薪资统计': sal.get('stats', {}),
+                '近12个月发薪明细(amount=实发,is_bonus=奖金月,saving_rate=工资结余率%)':
+                    sal.get('months', [])[-12:],
+                '薪资口径审计(off_channel=非工资卡的工资行,missed=工资卡大额入账未标工资)': sal.get('audit', {}),
+                '理财收益': {k: v for k, v in rep['invest'].items() if k != 'months'},
+                '其他收入分组': rep['other'].get('groups', []),
+            }
+        except Exception as e:
+            logger.warning(f"income summary fallback: {e}")
+            return year, None, f"{year} 年", {'汇总': _totals(ydf)}
+
     if scope == 'reconcile':
         try:
             from services import reconcile as rec_svc
@@ -209,7 +227,18 @@ def build_summary(df, scope, year, month):
 def _build_prompt(scope, period_label, payload):
     label = SCOPE_LABELS.get(scope, scope)
     data_json = json.dumps(payload, ensure_ascii=False, indent=1)
-    if scope == 'reconcile':
+    if scope == 'income':
+        system = (
+            "你是个人收入与职业财务顾问。下面是用户的『收入分析数据』:薪资逐月明细(已识别奖金月)、"
+            "薪资统计(平均/中位/发薪日/同比/储蓄率)、口径审计、理财收益与其他收入。"
+            "请写一份简明的中文收入分析报告,用 Markdown。要求:\n"
+            "1. 不要编造数字;\n"
+            "2. 结构:**💼 薪资画像**(月薪水平、稳定性、奖金规律、同比变化) → "
+            "**💰 储蓄能力**(工资结余率,消费是否吃掉工资,被动收入/其他收入的补充作用) → "
+            "**🔍 口径提示**(若审计列表非空,提醒核对) → **💡 建议**(2-3 条:储蓄/收入结构优化,务实);\n"
+            "3. 关键数字加粗;总篇幅控制在 350 字内。"
+        )
+    elif scope == 'reconcile':
         system = (
             "你是个人财务审计师。下面是用户账单的『口径对账数据』:多渠道账单(支付宝/微信/银行卡/信用卡)"
             "合并后,按资金性质把总流水剥离成 真实消费/真实收入/内部流转/还款/投资/往来。"

@@ -161,6 +161,9 @@ export const api = {
   aiAnalyzeGet: (params) => get('/ai/analyze', params),             // 取缓存的智能分析
   aiAnalyzeRun: (payload) => post('/ai/analyze', payload),          // 触发生成智能分析
 
+  // ==================== 收入分析 ====================
+  getIncomeAnalysis: (params) => get('/income_analysis', params),
+
   // ==================== 对账中心 / 资金性质口径 ====================
   getReconcile: (params) => get('/reconcile', params),
   natureRules: () => get('/nature/rules'),

@@ -61,7 +61,7 @@ const uiStore = useUiStore()
 
 marked.setOptions({ breaks: true, gfm: true })
 
-const SCOPE_LABELS = { yearly: '年度总览', monthly: '月度分析', category: '分类分析', time: '时间分析', channel: '渠道分析', reconcile: '对账中心' }
+const SCOPE_LABELS = { yearly: '年度总览', monthly: '月度分析', category: '分类分析', time: '时间分析', channel: '渠道分析', reconcile: '对账中心', income: '收入分析' }
 const scopeLabel = computed(() => SCOPE_LABELS[props.scope] || props.scope)
 
 const expanded = ref(true)

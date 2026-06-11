@@ -154,6 +154,7 @@ const route = useRoute()
 const analysisTabs = [
   { key: 'yearly', label: '年度总览' },
   { key: 'monthly', label: '月度分析' },
+  { key: 'income', label: '收入分析' },
   { key: 'category', label: '分类分析' },
   { key: 'time', label: '时间分析' },
   { key: 'channels', label: '渠道分析' },

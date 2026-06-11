@@ -188,6 +188,10 @@ def apply_nature(df, uid=None):
     if '是否退款' in df.columns:
         assign(df['是否退款'].fillna(False).astype(bool), '退款')
 
+    # 2.5 利息/结息/分红优先于分类映射 —— 银行转换分类会把结息混进「工资收入」,
+    #     必须在分类映射之前按关键词纠正,否则投资收益被工资吞掉
+    assign((zhi == '收入') & text.str.contains(r'利息|结息|分红|派息|收益到账', na=False), '投资收益')
+
     # 3. 交易分类映射
     mapped = cat.map(_CAT_EXACT)
     m = mapped.notna() & result.isna()
