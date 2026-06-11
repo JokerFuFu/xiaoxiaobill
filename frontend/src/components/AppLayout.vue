@@ -49,6 +49,10 @@
             >{{ s.label }}</router-link>
           </div>
         </div>
+        <router-link to="/networth" class="nav-item" :class="{ active: $route.path === '/networth' }">
+          <i class="fas fa-scale-balanced icon-networth"></i>
+          <span>资产负债</span>
+        </router-link>
         <router-link to="/insights" class="nav-item" :class="{ active: $route.path === '/insights' }">
           <i class="fas fa-lightbulb icon-insights"></i>
           <span>消费洞察</span>
@@ -153,6 +157,7 @@ const analysisTabs = [
   { key: 'category', label: '分类分析' },
   { key: 'time', label: '时间分析' },
   { key: 'channels', label: '渠道分析' },
+  { key: 'reconcile', label: '对账中心' },
 ]
 const analysisOpen = ref(route.path === '/analysis')
 const currentTab = computed(() => route.query.tab || 'yearly')
@@ -329,6 +334,7 @@ onMounted(async () => {
 .icon-settings { color: #8E8E93; }
 .icon-author { color: #FF2D55; }
 .icon-analysis { color: #5856D6; }
+.icon-networth { color: #34C759; }
 
 /* 数据分析:二级菜单 */
 .nav-group { display: flex; flex-direction: column; }

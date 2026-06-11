@@ -16,10 +16,10 @@ from services import ai as ai_svc
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ('yearly', 'monthly', 'category', 'time', 'channel')
+SCOPES = ('yearly', 'monthly', 'category', 'time', 'channel', 'reconcile')
 SCOPE_LABELS = {
     'yearly': '年度总览', 'monthly': '月度分析', 'category': '分类分析',
-    'time': '时间分析', 'channel': '渠道分析',
+    'time': '时间分析', 'channel': '渠道分析', 'reconcile': '对账中心',
 }
 MAX_REPORTS = 40
 
@@ -118,10 +118,15 @@ def build_summary(df, scope, year, month):
         if '成员' in ydf.columns:
             mg = _expense(ydf).groupby('成员')['金额'].sum().sort_values(ascending=False)
             members = [{'成员': str(k), '支出': _round(v)} for k, v in mg.items()]
+        natures = {}
+        if '资金性质' in ydf.columns:
+            ng = ydf.groupby('资金性质')['金额'].sum().sort_values(ascending=False)
+            natures = {str(k): _round(v) for k, v in ng.items()}
         return year, None, f"{year} 年度", {
             '本年汇总': _totals(ydf), '上一年支出': _totals(last).get('支出'),
             '逐月支出': {str(int(m)): _round(v) for m, v in mtrend.items()},
             'top分类': _top_cat(ydf), '成员支出': members,
+            '资金性质构成(消费=真实消费,工资/投资/其他收入=真实收入,其余为非收支流动)': natures,
         }
 
     if scope == 'monthly':
@@ -162,6 +167,29 @@ def build_summary(df, scope, year, month):
             'top分类': _top_cat(ydf, 8),
         }
 
+    if scope == 'reconcile':
+        try:
+            from services import reconcile as rec_svc
+            wf = rec_svc.waterfall(df, year)
+            fd = rec_svc.feeds(df, year)
+            cr = rec_svc.credit(df, year)
+            sus = rec_svc.suspects(df, year)
+            feeds_brief = [{'平台': p['platform'], '平台侧卡出资': p['platform_card_out_total'],
+                            '银行侧喂养': p['bank_feed_total']} for p in fd.get('platforms', [])]
+            return year, None, f"{year} 年", {
+                '流出口径(从总流出剥离到真实消费)': wf['outflow'],
+                '流入口径(从总流入剥离到真实收入)': wf['inflow'],
+                '真实消费': wf['real_expense'], '真实收入': wf['real_income'],
+                '内部搬运(不计收支)': wf['neutral'],
+                '平台喂养对账(两侧量级应接近)': feeds_brief,
+                '信用卡消费vs还款': {'消费合计': cr.get('consume_total'), '还款合计': cr.get('repay_total')},
+                '疑似双算组数': len(sus),
+                '疑似双算样例(不同来源同日同金额)': sus[:5],
+            }
+        except Exception as e:
+            logger.warning(f"reconcile summary fallback: {e}")
+            return year, None, f"{year} 年", {'汇总': _totals(ydf)}
+
     if scope == 'channel':
         try:
             from services.analysis import analyze_channels
@@ -181,13 +209,25 @@ def build_summary(df, scope, year, month):
 def _build_prompt(scope, period_label, payload):
     label = SCOPE_LABELS.get(scope, scope)
     data_json = json.dumps(payload, ensure_ascii=False, indent=1)
-    system = (
-        "你是资深个人理财分析师。下面给你一份用户账单的『结构化统计数据』(已聚合,金额单位元)。"
-        "请基于这些数字写一份简明的中文分析报告,用 Markdown。要求:\n"
-        "1. 不要编造数据里没有的数字,也不要罗列原始 JSON;\n"
-        "2. 结构:**📊 概览** → **🔍 亮点与异常**(指出最大头支出/明显波动/集中度) → **📈 趋势解读**(同比/环比/分布) → **💡 建议**(2-3 条可执行的优化/省钱建议);\n"
-        "3. 关键数字加粗,适当用列表;总篇幅控制在 350 字内,务实不空话。"
-    )
+    if scope == 'reconcile':
+        system = (
+            "你是个人财务审计师。下面是用户账单的『口径对账数据』:多渠道账单(支付宝/微信/银行卡/信用卡)"
+            "合并后,按资金性质把总流水剥离成 真实消费/真实收入/内部流转/还款/投资/往来。"
+            "请写一份简明的中文审计报告,用 Markdown。要求:\n"
+            "1. 不要编造数字;\n"
+            "2. 结构:**🧾 口径结论**(真实消费/真实收入是多少,占总流水的比例,说明大头都被剥离到了哪些非消费桶) → "
+            "**🔍 健康度检查**(平台喂养两侧量级是否接近、信用卡消费与还款是否匹配、疑似双算是否值得人工核对) → "
+            "**⚠️ 风险提示**(哪里口径可能不准、建议导入什么数据或加什么规则);\n"
+            "3. 关键数字加粗;总篇幅控制在 350 字内,结论要可执行。"
+        )
+    else:
+        system = (
+            "你是资深个人理财分析师。下面给你一份用户账单的『结构化统计数据』(已聚合,金额单位元)。"
+            "请基于这些数字写一份简明的中文分析报告,用 Markdown。要求:\n"
+            "1. 不要编造数据里没有的数字,也不要罗列原始 JSON;\n"
+            "2. 结构:**📊 概览** → **🔍 亮点与异常**(指出最大头支出/明显波动/集中度) → **📈 趋势解读**(同比/环比/分布) → **💡 建议**(2-3 条可执行的优化/省钱建议);\n"
+            "3. 关键数字加粗,适当用列表;总篇幅控制在 350 字内,务实不空话。"
+        )
     user = f"分析维度:{label}({period_label})\n\n结构化统计数据:\n```json\n{data_json}\n```"
     return system, user
 

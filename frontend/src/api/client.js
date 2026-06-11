@@ -159,7 +159,20 @@ export const api = {
   aiSaveRouting: (payload) => put('/ai/config', payload),            // 功能分配/默认档案/自定义供应商/自动分析
   aiTestConfig: (payload) => post('/ai/config/test', payload || {}),
   aiAnalyzeGet: (params) => get('/ai/analyze', params),             // 取缓存的智能分析
-  aiAnalyzeRun: (payload) => post('/ai/analyze', payload)           // 触发生成智能分析
+  aiAnalyzeRun: (payload) => post('/ai/analyze', payload),          // 触发生成智能分析
+
+  // ==================== 对账中心 / 资金性质口径 ====================
+  getReconcile: (params) => get('/reconcile', params),
+  natureRules: () => get('/nature/rules'),
+  natureRulesSave: (rules) => post('/nature/rules', { rules }),
+
+  // ==================== 资产负债(净资产) ====================
+  networthGet: () => get('/networth'),
+  networthAddAccount: (name, type) => post('/networth/accounts', { name, type }),
+  networthUpdateAccount: (aid, payload) => put(`/networth/accounts/${aid}`, payload),
+  networthDeleteAccount: (aid) => delete_(`/networth/accounts/${aid}`),
+  networthSaveSnapshot: (date, balances, note) => post('/networth/snapshots', { date, balances, note }),
+  networthDeleteSnapshot: (date) => delete_(`/networth/snapshots/${date}`)
 }
 
 // 401 未登录 → 跳登录页(登录页本身不跳,避免循环)

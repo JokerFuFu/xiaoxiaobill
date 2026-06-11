@@ -69,13 +69,24 @@ def load_demo_data():
     if '成员' not in df.columns:
         df['成员'] = '本人'
 
+    # 演示数据同样需要 转账归一 + 资金性质(否则对账中心在演示态会缺列)
+    try:
+        df = _normalize_platform_transfers(df)
+        from services.nature import apply_nature
+        df = apply_nature(df, None)   # 演示态无用户自定义规则
+    except Exception:
+        logger.exception("演示数据资金性质标注失败")
+        if '资金性质' not in df.columns:
+            df['资金性质'] = '其他'
+
     logger.info(f"加载演示数据: {len(df)} 条记录")
     return df
 
 
 _df_cache = {}
 _df_cache_lock = threading.Lock()
-_MEMBER_FILES = ('_members.json', '_file_members.json')   # 影响「成员」列,纳入缓存签名
+# 影响派生列(成员/资金性质)的辅助文件,纳入缓存签名:改动即失效重建
+_MEMBER_FILES = ('_members.json', '_file_members.json', '_nature_rules.json')
 
 
 def _data_signature(session_dir):
@@ -219,6 +230,16 @@ def _build_alipay_data(session_dir, uid):
                 combined_df = combined_df.drop(columns=[c])
 
         combined_df = combined_df.sort_values('交易时间')
+
+        # 资金性质标注(三表模型地基):分类映射+关键词+用户口径规则,纯增列不改既有数据
+        try:
+            from services.nature import apply_nature
+            combined_df = apply_nature(combined_df, uid)
+        except Exception:
+            logger.exception("资金性质标注失败(不阻断数据加载)")
+            if '资金性质' not in combined_df.columns:
+                combined_df['资金性质'] = '其他'   # 兜底列,保证下游(对账中心)永不缺列
+
         logger.info(f"加载账单数据: {len(combined_df)} 条记录")
 
         return combined_df

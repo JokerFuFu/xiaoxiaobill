@@ -11,6 +11,7 @@ const routes = [
   { path: '/category', redirect: '/analysis?tab=category' },
   { path: '/time', redirect: '/analysis?tab=time' },
   { path: '/channels', redirect: '/analysis?tab=channels' },
+  { path: '/networth', name: 'networth', component: () => import('@/views/NetWorth.vue') },
   { path: '/insights', name: 'insights', component: () => import('@/views/Insights.vue') },
   { path: '/transactions', name: 'transactions', component: () => import('@/views/Transactions.vue') },
   { path: '/transfers', name: 'transfers', component: () => import('@/views/Transactions.vue') },

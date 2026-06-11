@@ -187,6 +187,8 @@ def index():
 @app.route('/transfers')
 @app.route('/channels')
 @app.route('/insights')
+@app.route('/analysis')
+@app.route('/networth')
 @app.route('/settings')
 @app.route('/about-author')
 @app.route('/login')

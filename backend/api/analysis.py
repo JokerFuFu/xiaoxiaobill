@@ -1046,9 +1046,10 @@ def get_transactions():
         counterparty = request.args.get('counterparty')   # 交易对方(子串)
         desc = request.args.get('desc')                   # 商品说明(子串)
         status = request.args.get('status')               # 交易状态(精确)
+        nature = request.args.get('nature')               # 资金性质(精确)
         view = request.args.get('view', 'normal')  # normal=收支(排除转账) / transfer=转账记录
 
-        # 渠道/状态 下拉选项（全集去退款后，按笔数倒序，稳定不随其它筛选漂移）
+        # 渠道/状态/资金性质 下拉选项（全集去退款后，按笔数倒序，稳定不随其它筛选漂移）
         _opt_df = df[~df['是否退款'].fillna(False)] if '是否退款' in df.columns else df
         _opt_counts = _opt_df['_channel'].value_counts()
         channel_options = [{'label': str(k), 'count': int(v)} for k, v in _opt_counts.items()]
@@ -1057,6 +1058,11 @@ def get_transactions():
             status_options = [{'label': str(k), 'count': int(v)} for k, v in _st_counts.items() if str(k).strip()]
         else:
             status_options = []
+        if '资金性质' in _opt_df.columns:
+            _nt_counts = _opt_df['资金性质'].astype(str).value_counts()
+            nature_options = [{'label': str(k), 'count': int(v)} for k, v in _nt_counts.items() if str(k).strip()]
+        else:
+            nature_options = []
 
         # 应用筛选条件
         if type_:
@@ -1073,6 +1079,8 @@ def get_transactions():
             df = df[df['商品说明'].astype(str).str.contains(desc, case=False, na=False, regex=False)]
         if status and '交易状态' in df.columns:
             df = df[df['交易状态'].astype(str) == status]
+        if nature and '资金性质' in df.columns:
+            df = df[df['资金性质'].astype(str) == nature]
         if start_date:
             df = df[df['交易时间'] >= pd.to_datetime(start_date)]
         if end_date:
@@ -1165,7 +1173,8 @@ def get_transactions():
                 'amount': float(row['金额']),
                 'status': str(row['交易状态']) if pd.notna(row.get('交易状态')) else '交易成功',
                 'counterparty': str(row.get('交易对方', '')) if pd.notna(row.get('交易对方')) else '',
-                'channel': str(row['_channel']) if pd.notna(row.get('_channel')) else ''
+                'channel': str(row['_channel']) if pd.notna(row.get('_channel')) else '',
+                'nature': str(row.get('资金性质', '')) if pd.notna(row.get('资金性质')) else ''
             })
 
         return jsonify({
@@ -1175,6 +1184,7 @@ def get_transactions():
             'chart': chart,
             'channel_options': channel_options,
             'status_options': status_options,
+            'nature_options': nature_options,
             'pagination': {
                 'current_page': page,
                 'per_page': per_page,

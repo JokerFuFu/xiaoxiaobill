@@ -30,6 +30,7 @@ import Monthly from './Monthly.vue'
 import Category from './Category.vue'
 import Time from './Time.vue'
 import Channels from './Channels.vue'
+import Reconcile from './Reconcile.vue'
 
 const tabs = [
   { key: 'yearly', label: '年度总览', icon: 'fas fa-calendar-alt', comp: Yearly, scope: 'yearly' },
@@ -37,6 +38,7 @@ const tabs = [
   { key: 'category', label: '分类分析', icon: 'fas fa-tags', comp: Category, scope: 'category' },
   { key: 'time', label: '时间分析', icon: 'fas fa-clock', comp: Time, scope: 'time' },
   { key: 'channels', label: '渠道分析', icon: 'fas fa-credit-card', comp: Channels, scope: 'channel' },
+  { key: 'reconcile', label: '对账中心', icon: 'fas fa-scale-balanced', comp: Reconcile, scope: 'reconcile' },
 ]
 const validKeys = tabs.map(t => t.key)
 

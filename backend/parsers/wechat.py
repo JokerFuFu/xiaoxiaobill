@@ -1,10 +1,35 @@
 """
 微信账单解析器
 """
+import re
 import pandas as pd
 import logging
 
 logger = logging.getLogger(__name__)
+
+# 微信部分退款状态形如「已退款(¥5.00)」/「已退款（￥5.00）」
+_PARTIAL_REFUND_RE = re.compile(r'退款[（(]?[¥￥]\s*([\d,]+(?:\.\d+)?)')
+
+
+def _mark_refunds(df):
+    """退款打标(共用):
+    - 部分退款(状态带退款金额且小于原金额):原行保留净额(金额-退款额),不打退款标——
+      否则一笔 ¥30 只退 ¥5 的消费会被整行剔除,净消费 ¥25 凭空消失。
+    - 全额退款/关闭/撤销:维持原口径(整行打标,金额取负,被统计剔除)。"""
+    status = df['交易状态'].astype(str)
+    refund_like = status.str.contains('退款|关闭|撤销', case=False, na=False)
+    refund_amt = status.str.extract(_PARTIAL_REFUND_RE, expand=False).str.replace(',', '').astype(float)
+    is_partial = refund_like & refund_amt.notna() & (refund_amt < df['金额'].abs() * 0.999)
+
+    # 部分退款:净额化,不打退款标
+    df.loc[is_partial, '金额'] = (df.loc[is_partial, '金额'].abs() - refund_amt[is_partial]).round(2)
+    # 其余退款类:整行打标 + 负额(沿用全站口径)
+    full_refund = refund_like & ~is_partial
+    df['是否退款'] = full_refund
+    df.loc[full_refund, '金额'] = -df.loc[full_refund, '金额'].abs()
+    if is_partial.any():
+        logger.info(f"微信部分退款净额化 {int(is_partial.sum())} 笔")
+    return df
 
 
 def parse_wechat_csv(filepath):
@@ -52,9 +77,8 @@ def parse_wechat_csv(filepath):
         df['月份'] = df['交易时间'].dt.strftime('%Y-%m')
         df['日期'] = df['交易时间'].dt.strftime('%Y-%m-%d')
 
-        # 标记退款
-        df['是否退款'] = df['交易状态'].astype(str).str.contains('退款|关闭|撤销', case=False, na=False)
-        df.loc[df['是否退款'], '金额'] = -df.loc[df['是否退款'], '金额'].abs()
+        # 标记退款(部分退款净额化)
+        df = _mark_refunds(df)
 
         # 确保必要列
         if '交易对方' not in df.columns:
@@ -130,9 +154,8 @@ def parse_wechat_xlsx(filepath):
         df['月份'] = df['交易时间'].dt.strftime('%Y-%m')
         df['日期'] = df['交易时间'].dt.strftime('%Y-%m-%d')
 
-        # 标记退款
-        df['是否退款'] = df['交易状态'].astype(str).str.contains('退款|关闭|撤销', case=False, na=False)
-        df.loc[df['是否退款'], '金额'] = -df.loc[df['是否退款'], '金额'].abs()
+        # 标记退款(部分退款净额化)
+        df = _mark_refunds(df)
 
         # 确保所有必要列都存在
         if '交易对方' not in df.columns:

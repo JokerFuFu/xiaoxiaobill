@@ -315,9 +315,14 @@ _QUERY_TOOL = {
             'keyword': {'type': 'string', 'description': '关键字(匹配商品说明/交易对方/分类)'},
             'member': {'type': 'string', 'description': '成员名(如 本人/老婆)'},
             'source': {'type': 'string', 'description': '来源:支付宝/微信/银行'},
+            'nature': {'type': 'string',
+                       'enum': ['消费', '工资收入', '投资收益', '其他收入', '退款', '报销',
+                                '信用卡还款', '投资申赎', '内部流转', '转账往来', '其他'],
+                       'description': '资金性质(经济本质):真实消费=消费;真实收入=工资收入/投资收益/其他收入;'
+                                      '还款/投资/内部流转/转账往来都不算收支'},
             'min_amount': {'type': 'number'},
             'max_amount': {'type': 'number'},
-            'group_by': {'type': 'string', 'enum': ['category', 'month', 'member', 'source', 'counterparty'],
+            'group_by': {'type': 'string', 'enum': ['category', 'month', 'member', 'source', 'counterparty', 'nature'],
                          'description': '分组维度,返回各组金额合计'},
             'limit': {'type': 'integer', 'description': '返回明细样本条数,默认10,最多30'},
         },
@@ -405,6 +410,8 @@ def _apply_filters(df, args):
         d = d[d['成员'].astype(str).str.contains(args['member'], case=False, na=False)]
     if args.get('source') and '来源' in d.columns:
         d = d[d['来源'].astype(str).str.contains(args['source'], case=False, na=False)]
+    if args.get('nature') and '资金性质' in d.columns:
+        d = d[d['资金性质'] == args['nature']]
     if args.get('keyword'):
         kw = args['keyword']
         d = d[d['商品说明'].astype(str).str.contains(kw, case=False, na=False) |
@@ -426,7 +433,8 @@ def _run_query(df, args):
     info['total_amount'] = round(float(d['金额'].sum()), 2)
 
     gb = args.get('group_by')
-    colmap = {'category': '交易分类', 'member': '成员', 'source': '来源', 'counterparty': '交易对方'}
+    colmap = {'category': '交易分类', 'member': '成员', 'source': '来源',
+              'counterparty': '交易对方', 'nature': '资金性质'}
     if gb == 'month':
         g = d.groupby(d['交易时间'].dt.strftime('%Y-%m'))['金额'].agg(['sum', 'count'])
         info['groups'] = [{'key': k, 'amount': round(float(r['sum']), 2), 'count': int(r['count'])}
@@ -468,7 +476,10 @@ def chat_over_transactions(df, question, history=None, cfg=None, uid=None):
     system = (
         f"你是个人账单分析助手。今天是 {today}。用户的全部交易通过工具查询,你不能编造数字——"
         f"任何涉及金额/笔数/明细的回答都必须先调用工具拿到真实数据再回答。\n"
-        f"字段说明:『收/支』取值 收入/支出/转入/转出/不计收支(转入转出=转账,不计收支=内部搬运/理财申赎,真实花费只看『支出』)。"
+        f"字段说明:『收/支』取值 收入/支出/转入/转出/不计收支(转入转出=转账,不计收支=内部搬运/理财申赎)。"
+        f"『资金性质』(nature)是更准的经济口径:真实消费=消费;真实收入=工资收入/投资收益/其他收入;"
+        f"信用卡还款/投资申赎/内部流转/转账往来 都不是真实收支。"
+        f"用户问\"真实消费/真正花了多少/实际收入\"时,优先用 nature 参数过滤而非 type。"
         f"金额单位元。回答用中文,简洁。多条明细用 Markdown 表格输出(时间/商户/金额列),"
         f"重点数字加粗,不要罗列原始 JSON。数据有「成员」维度时可按成员对比。\n\n"
         "【图表】当数据适合可视化(趋势/对比/占比/排行)时,在回答中嵌入图表代码块,前端会渲染成交互图。格式:\n"

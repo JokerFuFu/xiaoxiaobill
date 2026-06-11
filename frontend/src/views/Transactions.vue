@@ -93,6 +93,15 @@
             </option>
           </select>
         </div>
+        <div class="ff">
+          <label>资金性质</label>
+          <select v-model="filters.nature" @change="onFilterChange">
+            <option value="">全部</option>
+            <option v-for="opt in natureOptions" :key="opt.label" :value="opt.label">
+              {{ opt.label }} ({{ opt.count }})
+            </option>
+          </select>
+        </div>
 
         <div class="ff ff-span2">
           <label>金额范围(元)</label>
@@ -285,6 +294,7 @@ const filters = reactive({
   category: '',
   type: '',
   status: '',
+  nature: '',
   counterparty: '',
   desc: '',
   minAmount: null,
@@ -294,12 +304,13 @@ const filters = reactive({
 
 const memberList = ref([])
 const statusOptions = ref([])
+const natureOptions = ref([])
 
 // 生效中的筛选数(时间范围算一项)
 const activeCount = computed(() => {
   let n = 0
   if (filters.startDate || filters.endDate) n++
-  for (const k of ['member', 'source', 'channel', 'category', 'type', 'status', 'counterparty', 'desc', 'search']) {
+  for (const k of ['member', 'source', 'channel', 'category', 'type', 'status', 'nature', 'counterparty', 'desc', 'search']) {
     if (filters[k]) n++
   }
   if (filters.minAmount !== null && filters.minAmount !== '') n++
@@ -424,6 +435,7 @@ async function loadTransactions() {
     if (filters.category) params.category = filters.category
     if (filters.type) params.type = filters.type
     if (filters.status) params.status = filters.status
+    if (filters.nature) params.nature = filters.nature
     if (filters.counterparty) params.counterparty = filters.counterparty
     if (filters.desc) params.desc = filters.desc
     if (filters.search) params.search = filters.search
@@ -448,6 +460,9 @@ async function loadTransactions() {
     }
     if (data.status_options && statusOptions.value.length === 0) {
       statusOptions.value = data.status_options
+    }
+    if (data.nature_options && natureOptions.value.length === 0) {
+      natureOptions.value = data.nature_options
     }
     if (data.chart) {
       chartData.by_category = data.chart.by_category || []
@@ -520,6 +535,7 @@ function resetFilters() {
   filters.category = ''
   filters.type = ''
   filters.status = ''
+  filters.nature = ''
   filters.counterparty = ''
   filters.desc = ''
   filters.minAmount = null
