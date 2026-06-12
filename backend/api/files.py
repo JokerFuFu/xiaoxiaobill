@@ -108,19 +108,23 @@ def list_files():
 
 @files_bp.route('/api/files/<filename>', methods=['DELETE'])
 def delete_file(filename):
-    """删除会话中的文件"""
-    if not filename.lower().endswith(('.csv', '.xlsx', '.pdf')):
+    """删除会话中的文件。
+    注意:不能用 secure_filename 清洗——它会剥掉中文字符,导致中文名账单
+    (邮箱导入/手工放入)永远删不掉。改用 basename + 白名单校验防穿越。"""
+    import re as _re
+    filename = os.path.basename(filename)
+    if '..' in filename or not _re.match(r'^[\w一-龥()()【】\- .]+\.(csv|xlsx|pdf)$', filename, _re.I):
         return jsonify({'success': False, 'error': '无效的文件名'})
 
     try:
         session_dir = get_session_dir()
-        filepath = os.path.join(session_dir, secure_filename(filename))
+        filepath = os.path.join(session_dir, filename)
 
         if os.path.exists(filepath):
             os.remove(filepath)
             from utils.session import get_current_uid
             from services import members as member_svc
-            member_svc.remove_file_member(get_current_uid() or '__anon__', secure_filename(filename))
+            member_svc.remove_file_member(get_current_uid() or '__anon__', filename)
             clear_data_cache()
             return jsonify({'success': True})
         else:
