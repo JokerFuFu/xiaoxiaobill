@@ -193,6 +193,22 @@ function _check401(response) {
   }
 }
 
+// 统一 JSON 解析:网关超时/重启时上游会返回 HTML 错误页,直接 .json() 会抛
+// "Unexpected token '<'" 这种天书 —— 这里转成人话
+async function _parseJson(response) {
+  try {
+    return await response.json()
+  } catch (e) {
+    if (response.status === 504) {
+      throw new Error('请求处理超时。如果是 AI 对话,回答通常已在后台完成并保存,刷新对话历史即可看到;也可以直接重试')
+    }
+    if (response.status === 502 || response.status === 503) {
+      throw new Error('服务暂时不可用(可能正在重启),请稍后重试')
+    }
+    throw new Error(`服务响应异常(HTTP ${response.status}),请重试`)
+  }
+}
+
 // ==================== 请求封装函数 ====================
 
 /**
@@ -214,7 +230,7 @@ async function get(endpoint, params) {
 
   const response = await fetch(url, { credentials: 'same-origin' })
   _check401(response)
-  const data = await response.json()
+  const data = await _parseJson(response)
 
   console.log('[API] Response:', data)
 
@@ -253,7 +269,7 @@ async function post(endpoint, data, signal) {
   })
   _check401(response)
 
-  const result = await response.json()
+  const result = await _parseJson(response)
 
   // 只在 success 字段存在且为 false 时才抛出错误
   if ('success' in result && !result.success) {
@@ -281,7 +297,7 @@ async function delete_(endpoint) {
   })
   _check401(response)
 
-  const data = await response.json()
+  const data = await _parseJson(response)
 
   // 只在 success 字段存在且为 false 时才抛出错误
   if ('success' in data && !data.success) {
@@ -310,7 +326,7 @@ async function put(endpoint, data) {
   })
   _check401(response)
 
-  const result = await response.json()
+  const result = await _parseJson(response)
   if ('success' in result && !result.success) {
     throw new Error(result.error || '请求失败')
   }
