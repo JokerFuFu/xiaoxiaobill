@@ -21,6 +21,7 @@ from .ai import ai_bp
 from .reconcile import reconcile_bp
 from .networth import networth_bp
 from .income import income_bp
+from .mail import mail_bp
 
 
 def register_blueprints(app):
@@ -34,7 +35,9 @@ def register_blueprints(app):
     app.register_blueprint(reconcile_bp)
     app.register_blueprint(networth_bp)
     app.register_blueprint(income_bp)
+    app.register_blueprint(mail_bp)
 
 
 __all__ = ['register_blueprints', 'files_bp', 'session_bp', 'analysis_bp',
-           'auth_bp', 'members_bp', 'ai_bp', 'reconcile_bp', 'networth_bp', 'income_bp']
+           'auth_bp', 'members_bp', 'ai_bp', 'reconcile_bp', 'networth_bp',
+           'income_bp', 'mail_bp']

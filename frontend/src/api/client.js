@@ -164,6 +164,13 @@ export const api = {
   // ==================== 收入分析 ====================
   getIncomeAnalysis: (params) => get('/income_analysis', params),
 
+  // ==================== 邮箱取账单(通用 IMAP) ====================
+  mailGetConfig: () => get('/mail/config'),
+  mailSaveConfig: (payload) => post('/mail/config', payload),
+  mailTest: () => post('/mail/test', {}),
+  mailFetch: (days) => post('/mail/fetch', { days }),
+  mailImport: (payload) => post('/mail/import', payload),
+
   // ==================== 对账中心 / 资金性质口径 ====================
   getReconcile: (params) => get('/reconcile', params),
   natureRules: () => get('/nature/rules'),
