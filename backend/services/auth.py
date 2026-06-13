@@ -15,7 +15,8 @@ from secrets import token_hex
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 
-from config import USERS_FILE, DATA_DIR, BOOTSTRAP_ADMIN_USERNAME, BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_DISPLAY
+from config import (USERS_FILE, DATA_DIR, BOOTSTRAP_ADMIN_USERNAME,
+                    BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_DISPLAY, BOOTSTRAP_USED_DEFAULT_PW)
 
 logger = logging.getLogger(__name__)
 _lock = threading.RLock()
@@ -48,6 +49,8 @@ class User(UserMixin):
         self.display_name = rec.get('display_name', self.username)
         self.role = rec.get('role', 'user')
         self.created_at = rec.get('created_at', '')
+        # 仍在用默认/初始口令时为 True,登录后提醒尽快改密;任意一次改密即清除
+        self.must_change_pw = bool(rec.get('must_change_pw', False))
 
     @property
     def is_admin(self):
@@ -57,6 +60,7 @@ class User(UserMixin):
         return {
             'id': self.id, 'username': self.username, 'display_name': self.display_name,
             'role': self.role, 'created_at': self.created_at, 'is_admin': self.is_admin,
+            'must_change_pw': self.must_change_pw,
         }
 
 
@@ -112,6 +116,9 @@ def set_password(uid, password):
         if uid not in d:
             raise ValueError('用户不存在')
         d[uid]['password_hash'] = generate_password_hash(password)
+        # 改过密码即不再是「默认口令」,清除提醒标志,登录页也不再暴露默认账号
+        d[uid].pop('must_change_pw', None)
+        d[uid].pop('bootstrap_default_pw', None)
         _save(d)
         return True
 
@@ -138,6 +145,32 @@ def ensure_admin():
     try:
         create_user(BOOTSTRAP_ADMIN_USERNAME, BOOTSTRAP_ADMIN_PASSWORD,
                     display_name=BOOTSTRAP_ADMIN_DISPLAY, role='admin', uid='user_local')
+        # 标记「仍用初始口令」:登录后提醒改密;若沿用内置默认口令,登录页可一键带入
+        with _lock:
+            d = _load()
+            if 'user_local' in d:
+                d['user_local']['must_change_pw'] = True
+                d['user_local']['bootstrap_default_pw'] = bool(BOOTSTRAP_USED_DEFAULT_PW)
+                _save(d)
         logger.info(f"已 bootstrap 管理员账号: {BOOTSTRAP_ADMIN_USERNAME} (uid=user_local)")
     except Exception as e:
         logger.error(f"bootstrap 管理员失败: {e}")
+
+
+def fresh_install_info():
+    """首次安装引导信息(供登录页,无需登录)。
+
+    仅在「只有一个账号 + 就是 bootstrap 管理员 + 从未改过密码」时返回 fresh=True,
+    方便新部署者首次进入;一旦改密立即收敛为 fresh=False。
+    default_password 只在部署者沿用内置默认口令时给出(该口令本就明文在开源仓库里)。
+    """
+    d = _load()
+    if len(d) != 1 or 'user_local' not in d:
+        return {'fresh': False}
+    rec = d['user_local']
+    if not rec.get('must_change_pw'):
+        return {'fresh': False}
+    info = {'fresh': True, 'username': rec.get('username', 'admin')}
+    if rec.get('bootstrap_default_pw') and BOOTSTRAP_USED_DEFAULT_PW:
+        info['default_password'] = 'admin12345'
+    return info

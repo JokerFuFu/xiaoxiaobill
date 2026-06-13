@@ -7,6 +7,20 @@
         <p class="sub">隐私优先 · 多用户记账</p>
       </div>
 
+      <!-- 全新部署引导:带出默认账号,首次进入点一下即可 -->
+      <div v-if="fresh" class="fresh-tip">
+        <p class="fresh-title"><i class="fas fa-hand-sparkles"></i> 首次使用</p>
+        <p class="fresh-body">
+          <template v-if="defaultPassword">
+            已为你填入默认管理员账号 <b>{{ freshUser }} / {{ defaultPassword }}</b>，直接点「登录」即可进入。
+          </template>
+          <template v-else>
+            默认管理员账号为 <b>{{ freshUser }}</b>，密码是你部署时设置的 <code>ADMIN_PASSWORD</code>。
+          </template>
+          <br />进入后请到「设置 → 账号」尽快修改密码。
+        </p>
+      </div>
+
       <form class="login-form" @submit.prevent="onLogin">
         <label>用户名</label>
         <input v-model.trim="username" type="text" placeholder="请输入用户名" autocomplete="username" />
@@ -28,7 +42,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useSessionStore } from '@/stores/session'
@@ -50,6 +64,26 @@ const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+
+// 首次安装引导:全新部署且管理员仍用初始口令时,带出默认账号方便进入
+const fresh = ref(false)
+const freshUser = ref('admin')
+const defaultPassword = ref('')
+
+onMounted(async () => {
+  try {
+    const r = await api.authBootstrap()
+    if (r && r.fresh) {
+      fresh.value = true
+      freshUser.value = r.username || 'admin'
+      username.value = r.username || 'admin'
+      if (r.default_password) {
+        defaultPassword.value = r.default_password
+        password.value = r.default_password
+      }
+    }
+  } catch (e) { /* 引导信息拿不到不影响正常登录 */ }
+})
 
 async function onLogin() {
   if (!username.value || !password.value) { error.value = '请输入用户名和密码'; return }
@@ -101,6 +135,14 @@ async function onDemo() {
 .login-logo { width: 72px; height: 72px; object-fit: contain; }
 .login-head h1 { font-size: 22px; margin: 8px 0 2px; color: #1d1d1f; }
 .login-head .sub { color: #86868b; font-size: 13px; margin: 0; }
+.fresh-tip {
+  background: #f0f7ff; border: 1px solid #cfe4ff; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 4px;
+}
+.fresh-title { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: #007AFF; }
+.fresh-body { margin: 0; font-size: 12.5px; line-height: 1.6; color: #4a5568; }
+.fresh-body b { color: #1d1d1f; }
+.fresh-body code { background: #e3edf9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 .login-form { display: flex; flex-direction: column; }
 .login-form label { font-size: 13px; color: #6e6e73; margin: 12px 0 6px; }
 .login-form input {

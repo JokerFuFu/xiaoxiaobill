@@ -8,6 +8,18 @@
     <button @click="exitDemoMode" class="exit-demo-btn">退出演示</button>
   </div>
 
+  <!-- 默认密码安全提醒(全新部署 / 仍用初始口令) -->
+  <div v-if="showPwNudge" class="pw-banner">
+    <div class="pw-content">
+      <i class="fas fa-shield-halved"></i>
+      <span>你还在使用初始密码，为账号安全建议立即修改。</span>
+    </div>
+    <div class="pw-actions">
+      <router-link to="/settings?tab=account" class="pw-go-btn" @click="dismissPwNudge">去修改</router-link>
+      <button class="pw-close-btn" @click="dismissPwNudge" title="本次会话内不再提醒"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- 侧边栏 -->
     <aside class="sidebar">
@@ -161,6 +173,12 @@ const analysisTabs = [
 ]
 const analysisOpen = ref(route.path === '/analysis')
 const currentTab = computed(() => route.query.tab || 'yearly')
+
+// 默认密码安全提醒:仍用初始口令且本次会话未手动关闭时显示(改密后 must_change_pw 自动转 false)
+const pwNudgeDismissed = ref(false)
+const showPwNudge = computed(() =>
+  !sessionStore.isDemo && !!authStore.user?.must_change_pw && !pwNudgeDismissed.value)
+function dismissPwNudge() { pwNudgeDismissed.value = true }
 function toggleAnalysis() {
   if (route.path !== '/analysis') {
     router.push('/analysis')
@@ -401,6 +419,34 @@ onMounted(async () => {
 .exit-demo-btn:hover {
   background: #E65100;
 }
+
+/* 默认密码安全提醒横幅 */
+.pw-banner {
+  background: #FFF1F0;
+  color: #C0392B;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #FBD5D0;
+  position: sticky;
+  top: 0;
+  z-index: 1001;
+}
+.pw-content { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.pw-content i { font-size: 16px; }
+.pw-actions { display: flex; align-items: center; gap: 8px; }
+.pw-go-btn {
+  background: #C0392B; color: #fff; border: none;
+  padding: 6px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; cursor: pointer; text-decoration: none; transition: background 0.2s ease;
+}
+.pw-go-btn:hover { background: #A93226; }
+.pw-close-btn {
+  background: transparent; border: none; color: #C0392B;
+  cursor: pointer; font-size: 15px; padding: 4px 6px; line-height: 1;
+}
+.pw-close-btn:hover { color: #A93226; }
 
 /* 全局加载状态 */
 .global-loader {

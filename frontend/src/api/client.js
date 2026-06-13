@@ -128,6 +128,7 @@ export const api = {
 
   // ==================== 鉴权 / 用户管理 ====================
   authMe: () => get('/auth/me'),
+  authBootstrap: () => get('/auth/bootstrap'),   // 首次安装引导:全新部署时带出默认账号
   login: (username, password) => post('/auth/login', { username, password }),
   logout: () => post('/auth/logout', {}),
   changePassword: (old_password, new_password) => post('/auth/password', { old_password, new_password }),

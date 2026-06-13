@@ -33,6 +33,13 @@ def admin_required(f):
     return wrapper
 
 
+@auth_bp.route('/api/auth/bootstrap')
+def bootstrap_info():
+    """首次安装引导(公开):全新部署且管理员仍用初始口令时,告知默认账号方便首次登录。
+    改密后立即返回 fresh=False,不再暴露任何信息。"""
+    return jsonify({'success': True, **auth_svc.fresh_install_info()})
+
+
 @auth_bp.route('/api/auth/login', methods=['POST'])
 def login():
     data = request.get_json(silent=True) or {}

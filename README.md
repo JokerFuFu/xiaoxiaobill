@@ -229,12 +229,29 @@
 git clone https://github.com/dtsola/xiaoyaoprivatebill.git
 cd xiaoyaoprivatebill
 
-# 2. 一键启动
+# 2.（可选）配置环境变量：复制模板后按需修改管理员密码 / AI Key
+cp .env.example .env
+
+# 3. 一键启动
 docker-compose up -d
 
-# 3. 访问应用
+# 4. 访问应用
 # 浏览器打开: http://localhost:8888
 ```
+
+> **第 2 步可以跳过**：不创建 `.env` 也能直接启动，所有配置都有默认值。
+
+#### 首次登录
+
+打开 `http://localhost:8888` 后会看到登录页：
+
+- **默认账号：`admin` / `admin12345`**（若未改 `.env`，登录页会自动带入，点「登录」即可进入）
+- 进入后请到 **「设置 → 账号」** 尽快修改密码（顶部也会有安全提醒，改完自动消失）
+- 想先体验功能？点登录页的 **「先随便看看（演示数据）」**，无需上传即可浏览示例
+
+#### 关于 AI 助手（可选）
+
+不配置 AI 也能使用**全部**账单分析功能。仅当你想用首页/智能分析里的「AI 对话」时，才需要在 `.env` 里填 `ANTHROPIC_API_KEY`，或登录后到「设置 → AI 与模型」里配置（兼容任意 Anthropic 格式端点，默认 Kimi）。
 
 #### 常用命令
 

@@ -107,7 +107,7 @@ def _unauthorized():
 
 
 # 公开(无需登录)的 API 前缀/路径
-_PUBLIC_API = ('/api/auth/login', '/api/auth/logout', '/api/auth/me',
+_PUBLIC_API = ('/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/bootstrap',
                '/api/session/status', '/api/demo/enter', '/api/demo/exit', '/api/ai/status')
 
 
