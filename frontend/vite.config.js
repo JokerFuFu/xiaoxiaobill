@@ -22,6 +22,17 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        // 把大体积第三方库拆成独立 chunk:内容稳定,部署应用代码后浏览器仍能命中缓存,
+        // 不必每次重新下载 ~1MB 的 echarts
+        manualChunks: {
+          echarts: ['echarts'],
+          markdown: ['marked', 'dompurify'],
+        }
+      }
+    }
   }
 })

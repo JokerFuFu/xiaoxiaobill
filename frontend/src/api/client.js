@@ -161,6 +161,12 @@ export const api = {
   aiAnalyzeGet: (params) => get('/ai/analyze', params),             // 取缓存的智能分析
   aiAnalyzeRun: (payload) => post('/ai/analyze', payload),          // 触发生成智能分析
 
+  // ==================== 首页概览 + 预算 ====================
+  homeOverview: () => get('/home/overview'),
+  budgetGet: () => get('/budget'),
+  budgetSave: (payload) => post('/budget', payload),
+  budgetStatus: (params) => get('/budget/status', params),
+
   // ==================== 收入分析 ====================
   getIncomeAnalysis: (params) => get('/income_analysis', params),
 
