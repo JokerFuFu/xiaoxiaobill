@@ -188,10 +188,14 @@ def _build_alipay_data(session_dir, uid):
                     logger.error(f"处理 CSV 文件 {filename} 失败: {str(e)}")
                     continue
 
-            # 处理 XLSX 文件 (微信)
+            # 处理 XLSX 文件 (微信 / 网商银行+余利宝)
             elif filename.endswith('.xlsx'):
                 try:
-                    df = parse_wechat_xlsx(filepath)
+                    from parsers.mybank import is_mybank_xlsx, parse_mybank_xlsx
+                    if is_mybank_xlsx(filepath):
+                        df = parse_mybank_xlsx(filepath)   # 网商账户收支 / 余利宝资金明细
+                    else:
+                        df = parse_wechat_xlsx(filepath)
                 except Exception as e:
                     logger.error(f"处理 XLSX 文件 {filename} 失败: {str(e)}")
                     continue
