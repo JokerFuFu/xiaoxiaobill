@@ -11,8 +11,8 @@
       </button>
     </div>
 
-    <!-- 顶部 AI 智能分析(随标签切换维度) -->
-    <AiAnalysisPanel :scope="scope" :key="scope" />
+    <!-- 顶部 AI 智能分析(随标签切换维度;订阅/境外暂无 AI 维度则不渲染) -->
+    <AiAnalysisPanel v-if="scope" :scope="scope" :key="scope" />
 
     <!-- 子分析(保活,切换不丢图表与状态) -->
     <keep-alive>
@@ -31,6 +31,8 @@ import Category from './Category.vue'
 import Time from './Time.vue'
 import Channels from './Channels.vue'
 import Reconcile from './Reconcile.vue'
+import Recurring from './Recurring.vue'
+import Overseas from './Overseas.vue'
 
 const tabs = [
   { key: 'yearly', label: '年度总览', icon: 'fas fa-calendar-alt', comp: Yearly, scope: 'yearly' },
@@ -38,6 +40,8 @@ const tabs = [
   { key: 'category', label: '分类分析', icon: 'fas fa-tags', comp: Category, scope: 'category' },
   { key: 'time', label: '时间分析', icon: 'fas fa-clock', comp: Time, scope: 'time' },
   { key: 'channels', label: '渠道分析', icon: 'fas fa-credit-card', comp: Channels, scope: 'channel' },
+  { key: 'recurring', label: '订阅/定期', icon: 'fas fa-repeat', comp: Recurring, scope: null },
+  { key: 'overseas', label: '境外消费', icon: 'fas fa-earth-asia', comp: Overseas, scope: null },
   { key: 'reconcile', label: '对账中心', icon: 'fas fa-scale-balanced', comp: Reconcile, scope: 'reconcile' },
 ]
 const validKeys = tabs.map(t => t.key)

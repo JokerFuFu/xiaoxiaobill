@@ -13,6 +13,7 @@ const routes = [
   { path: '/channels', redirect: '/analysis?tab=channels' },
   { path: '/networth', name: 'networth', component: () => import('@/views/NetWorth.vue') },
   { path: '/insights', name: 'insights', component: () => import('@/views/Insights.vue') },
+  { path: '/annual', name: 'annual', component: () => import('@/views/Annual.vue') },
   { path: '/transactions', name: 'transactions', component: () => import('@/views/Transactions.vue') },
   { path: '/transfers', name: 'transfers', component: () => import('@/views/Transactions.vue') },
   { path: '/ai', name: 'ai', component: () => import('@/views/AI.vue') },

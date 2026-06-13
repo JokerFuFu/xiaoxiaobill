@@ -69,6 +69,10 @@
           <i class="fas fa-lightbulb icon-insights"></i>
           <span>消费洞察</span>
         </router-link>
+        <router-link to="/annual" class="nav-item" :class="{ active: $route.path === '/annual' }">
+          <i class="fas fa-gift icon-annual"></i>
+          <span>年度账单</span>
+        </router-link>
         <router-link to="/transactions" class="nav-item" :class="{ active: $route.path === '/transactions' }">
           <i class="fas fa-receipt icon-transactions"></i>
           <span>交易记录</span>
@@ -169,6 +173,8 @@ const analysisTabs = [
   { key: 'category', label: '分类分析' },
   { key: 'time', label: '时间分析' },
   { key: 'channels', label: '渠道分析' },
+  { key: 'recurring', label: '订阅/定期' },
+  { key: 'overseas', label: '境外消费' },
   { key: 'reconcile', label: '对账中心' },
 ]
 const analysisOpen = ref(route.path === '/analysis')

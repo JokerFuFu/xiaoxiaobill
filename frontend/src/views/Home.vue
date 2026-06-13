@@ -95,6 +95,21 @@
             </div>
           </div>
 
+          <!-- 异常提醒 -->
+          <div v-if="anomalies.length" class="card alert-card">
+            <div class="card-head">
+              <h3><i class="fas fa-triangle-exclamation" style="color:#FF9500"></i> 异常提醒</h3>
+              <span class="muted">{{ anomalyCount }} 条 · 仅供留意</span>
+            </div>
+            <div v-for="(a, i) in anomalies" :key="i" class="alert-row">
+              <span class="alert-dot" :class="sevClass(a.severity)"></span>
+              <div class="alert-body">
+                <div class="alert-title">{{ a.title }}</div>
+                <div class="alert-detail">{{ a.detail }}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 近6月趋势 -->
           <div class="card">
             <div class="card-head"><h3><i class="fas fa-chart-column" style="color:#5856D6"></i> 近 6 个月消费</h3></div>
@@ -190,6 +205,10 @@ const budget = ref(null)
 const trendRef = ref(null)
 let trendChart = null
 
+const anomalies = ref([])
+const anomalyCount = ref(0)
+function sevClass(s) { return s >= 80 ? 'high' : s >= 60 ? 'mid' : 'low' }
+
 const budgetModal = ref(false)
 const budgetSaving = ref(false)
 const bform = ref({ total: null, cats: [] })
@@ -219,12 +238,24 @@ async function load() {
       loading.value = false
       await nextTick()
       renderTrend()
+      loadAnomalies()
     }
   } catch (e) {
     uiStore.showError('加载失败: ' + e.message)
   } finally {
     loading.value = false
   }
+}
+
+// 异常提醒(非阻塞,失败静默,不影响首页主体)
+async function loadAnomalies() {
+  try {
+    const r = await api.getAnomalies()
+    if (!r.empty && r.alerts) {
+      anomalies.value = r.alerts.slice(0, 4)
+      anomalyCount.value = r.count
+    }
+  } catch (e) { /* 忽略 */ }
 }
 
 function renderTrend() {
@@ -342,6 +373,18 @@ onUnmounted(() => { window.removeEventListener('resize', onResize); trendChart &
 .bud-cat-head { display: flex; justify-content: space-between; font-size: 12.5px; color: #4a4a4f; margin-bottom: 5px; }
 
 .mini-chart { width: 100%; height: 180px; }
+
+/* 异常提醒 */
+.alert-card { border-color: #ffe6c2; background: #fffdf8; }
+.alert-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f6f1e8; }
+.alert-row:last-child { border-bottom: none; }
+.alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+.alert-dot.high { background: #FF3B30; }
+.alert-dot.mid { background: #FF9500; }
+.alert-dot.low { background: #FFCC00; }
+.alert-body { min-width: 0; }
+.alert-title { font-size: 14px; font-weight: 500; color: #1d1d1f; }
+.alert-detail { font-size: 12.5px; color: #86868b; margin-top: 2px; line-height: 1.5; }
 
 /* top 分类 / 大额 */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }

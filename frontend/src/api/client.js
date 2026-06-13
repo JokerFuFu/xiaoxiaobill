@@ -178,6 +178,13 @@ export const api = {
   mailFetch: (days) => post('/mail/fetch', { days }),
   mailImport: (payload) => post('/mail/import', payload),
 
+  // ==================== 账单洞察:订阅/境外/异常/年度账单 ====================
+  getRecurring: (params) => get('/recurring', params),
+  getOverseas: (params) => get('/overseas', params),
+  getAnomalies: () => get('/anomalies'),
+  getAnnualReport: (params) => get('/annual_report', params),
+  genAnnualNarrative: (payload) => post('/annual_report/narrative', payload || {}),
+
   // ==================== 对账中心 / 资金性质口径 ====================
   getReconcile: (params) => get('/reconcile', params),
   natureRules: () => get('/nature/rules'),
