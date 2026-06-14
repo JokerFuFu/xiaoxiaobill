@@ -182,6 +182,7 @@ export const api = {
   getRecurring: (params) => get('/recurring', params),
   getOverseas: (params) => get('/overseas', params),
   getAnomalies: () => get('/anomalies'),
+  getPeerTransfers: (params) => get('/peer_transfers', params),
   getAnnualReport: (params) => get('/annual_report', params),
   genAnnualNarrative: (payload) => post('/annual_report/narrative', payload || {}),
 

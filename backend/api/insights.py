@@ -16,6 +16,7 @@ from services.data_loader import load_alipay_data
 from services import overseas as overseas_svc
 from services import recurring as recurring_svc
 from services import anomaly as anomaly_svc
+from services import peer as peer_svc
 from services import annual_report as annual_svc
 from services import ai as ai_svc
 
@@ -66,6 +67,20 @@ def overseas():
     except Exception:
         logger.exception("境外消费识别失败")
         return jsonify({'success': False, 'error': '识别失败,请稍后重试'}), 500
+    return jsonify({'success': True, 'empty': False, **data})
+
+
+@insights_bp.route('/api/peer_transfers')
+def peer_transfers():
+    df = _df_or_empty()
+    if df is None:
+        return jsonify({'success': True, 'empty': True})
+    name = (request.args.get('name') or '').strip()[:30] or None
+    try:
+        data = peer_svc.peer_transfers(df, uid=_uid(), name=name)
+    except Exception:
+        logger.exception("个人往来对账失败")
+        return jsonify({'success': False, 'error': '统计失败,请稍后重试'}), 500
     return jsonify({'success': True, 'empty': False, **data})
 
 
