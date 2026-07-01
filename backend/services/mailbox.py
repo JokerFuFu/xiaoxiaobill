@@ -287,6 +287,7 @@ def fetch_bills(uid, days=90):
                 break
 
         imported = _load_imported(uid)
+        pending = _load_pending(uid)
         results = []
         for u, subject, sender, date_raw in candidates:
             try:
@@ -302,13 +303,15 @@ def fetch_bills(uid, days=90):
             except Exception:
                 date_str = str(date_raw)[:25]
             rec = imported.get(u.decode())
+            pend_idx = set(pending.get(u.decode(), {}).get('indices', []))
             results.append({
                 'uid': u.decode(),
                 'subject': subject[:80] or '(无主题)',
                 'sender': sender[:60],
                 'date': date_str,
                 'attachments': [{'index': i, 'filename': fn, 'size': sz,
-                                 'is_zip': fn.lower().endswith('.zip')}
+                                 'is_zip': fn.lower().endswith('.zip'),
+                                 'needs_password': i in pend_idx}
                                 for i, fn, sz, _ in atts],
                 'imported_files': (rec or {}).get('files', []),
             })
