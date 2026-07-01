@@ -213,6 +213,19 @@
           </span>
         </div>
 
+        <div class="cfg-actions" style="margin-top:8px">
+          <label class="switch">
+            <input type="checkbox" v-model="mailAutoImport" :disabled="!mailCfg.has_auth" @change="toggleAutoImport" />
+            <span class="slider"></span>
+          </label>
+          <span>{{ mailAutoImport ? '自动导入已开启' : '自动导入已关闭' }}</span>
+          <span v-if="mailCfg.pending_count" class="cfg-badge custom">{{ mailCfg.pending_count }} 封待导入(需要密码)</span>
+          <span v-if="mailCfg.last_error" class="test-result">
+            <i class="fas fa-circle-xmark"></i> 自动同步失败:{{ mailCfg.last_error }}
+          </span>
+          <span v-else-if="mailCfg.last_success_at" class="muted">上次自动同步:{{ mailCfg.last_success_at }}</span>
+        </div>
+
         <!-- 拉取与导入 -->
         <div class="mail-fetch-bar">
           <label>拉取近</label>
@@ -241,6 +254,7 @@
               <i :class="a.is_zip ? 'fas fa-file-zipper' : 'fas fa-file-lines'"></i>
               <span class="att-name">{{ a.filename }}</span>
               <span class="att-size">{{ fmtSize(a.size) }}</span>
+              <span v-if="a.needs_password" class="cfg-badge default">需要密码</span>
               <input
                 v-if="a.is_zip" v-model="zipPwd[m.uid + ':' + a.index]"
                 class="att-pwd" placeholder="zip 密码(如有)" autocomplete="off"
@@ -719,8 +733,10 @@ async function testEditing() {
 }
 
 // ==================== 从邮箱导入账单 ====================
-const mailCfg = ref({ host: '', port: 993, address: '', has_auth: false, presets: [] })
+const mailCfg = ref({ host: '', port: 993, address: '', has_auth: false, presets: [],
+                       auto_import: false, pending_count: 0, last_run_at: '', last_success_at: '', last_error: '' })
 const mailForm = ref({ host: '', port: 993, address: '', auth_code: '' })
+const mailAutoImport = ref(false)
 const mailCustom = ref(false)
 const mailBusy = ref('')
 const mailTestMsg = ref('')
@@ -757,7 +773,20 @@ async function loadMailConfig() {
     mailForm.value.port = r.config.port || 993
     mailForm.value.address = r.config.address || ''
     mailForm.value.auth_code = ''
+    mailAutoImport.value = !!r.config.auto_import
   } catch (e) { /* 未登录等场景忽略 */ }
+}
+
+async function toggleAutoImport() {
+  const next = mailAutoImport.value
+  try {
+    const r = await api.mailSaveConfig({ auto_import: next })
+    mailCfg.value = r.config
+    uiStore.showSuccess(next ? '已开启自动导入' : '已关闭自动导入')
+  } catch (e) {
+    mailAutoImport.value = !next
+    uiStore.showError(e.message || '设置失败')
+  }
 }
 
 async function saveMailConfig() {
