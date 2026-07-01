@@ -613,3 +613,12 @@ def should_start_mail_scheduler(debug, werkzeug_run_main):
     reloader 会额外起一个子进程,只在真正对外服务的子进程(WERKZEUG_RUN_MAIN=='true')里启动,
     避免同一台机器上跑出两份定时任务。"""
     return (not debug) or werkzeug_run_main == 'true'
+
+
+def validate_auto_import_request(auto_import, final_host, final_address, final_auth):
+    """校验"即将生效"的邮箱配置是否足够开启自动导入;合法返回 None,否则返回错误提示。"""
+    if not auto_import:
+        return None
+    if not (final_host and final_address and final_auth):
+        return '请先完整配置邮箱(服务器/地址/授权码)再开启自动导入'
+    return None

@@ -39,9 +39,21 @@ def save_config():
         return jsonify({'success': False, 'error': '服务器地址格式不对'}), 400
     if address and '@' not in address:
         return jsonify({'success': False, 'error': '邮箱地址格式不对'}), 400
-    mail_svc.save_config(_uid(), host=host or None, port=data.get('port'),
-                         address=address or None, auth_code=data.get('auth_code'))
-    return jsonify({'success': True, 'config': mail_svc.public_config(_uid())})
+
+    uid = _uid()
+    auto_import = bool(data.get('auto_import'))
+    cur = mail_svc.load_config(uid)
+    final_host = host or cur.get('host', '')
+    final_address = address or cur.get('address', '')
+    final_auth = data.get('auth_code') or cur.get('auth_code', '')
+    err = mail_svc.validate_auto_import_request(auto_import, final_host, final_address, final_auth)
+    if err:
+        return jsonify({'success': False, 'error': err}), 400
+
+    mail_svc.save_config(uid, host=host or None, port=data.get('port'),
+                         address=address or None, auth_code=data.get('auth_code'),
+                         auto_import=(bool(data.get('auto_import')) if 'auto_import' in data else None))
+    return jsonify({'success': True, 'config': mail_svc.public_config(uid)})
 
 
 @mail_bp.route('/api/mail/test', methods=['POST'])
