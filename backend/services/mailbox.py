@@ -429,3 +429,105 @@ def import_attachment(uid, mail_uid, att_index, zip_password=None, member_id=Non
 
     logger.info(f"邮箱导入 {len(saved)} 个账单文件: {saved}")
     return {'files': saved}
+
+
+# ============ 自动导入:待处理队列 ============
+def _pending_file(uid):
+    return os.path.join(UPLOAD_FOLDER, uid, '_mail_pending.json')
+
+
+def _load_pending(uid):
+    try:
+        p = _pending_file(uid)
+        if os.path.exists(p):
+            with open(p, encoding='utf-8') as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_pending(uid, data):
+    # 只保留最近 500 条记录,策略与 _mail_imported.json 一致
+    if len(data) > 500:
+        items = sorted(data.items(), key=lambda kv: kv[1].get('seen_at', ''), reverse=True)
+        data = dict(items[:500])
+    p = _pending_file(uid)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, p)
+
+
+def _mark_pending(uid, mail_uid, mail_meta, att):
+    """记一条"需要密码才能完成导入"的附件(通常是支付宝加密 zip)。"""
+    with _mail_lock:
+        pending = _load_pending(uid)
+        key = str(mail_uid)
+        rec = pending.setdefault(key, {
+            'subject': mail_meta.get('subject', ''), 'sender': mail_meta.get('sender', ''),
+            'date': mail_meta.get('date', ''), 'indices': [], 'attachments': [], 'seen_at': '',
+        })
+        idx = int(att['index'])
+        if idx not in rec['indices']:
+            rec['indices'].append(idx)
+        if not any(a['index'] == idx for a in rec['attachments']):
+            rec['attachments'].append({'index': idx, 'filename': att.get('filename', '')})
+        rec['seen_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        _save_pending(uid, pending)
+
+
+def _clear_pending_index(uid, mail_uid, att_index):
+    """手动补齐密码导入成功后,把这个附件从待处理队列摘除。"""
+    with _mail_lock:
+        pending = _load_pending(uid)
+        key = str(mail_uid)
+        rec = pending.get(key)
+        if not rec:
+            return
+        idx = int(att_index)
+        rec['indices'] = [i for i in rec.get('indices', []) if i != idx]
+        rec['attachments'] = [a for a in rec.get('attachments', []) if a['index'] != idx]
+        if not rec['indices']:
+            del pending[key]
+        _save_pending(uid, pending)
+
+
+def pending_count(uid):
+    return sum(len(r.get('indices', [])) for r in _load_pending(uid).values())
+
+
+# ============ 自动导入:健康状态 ============
+def _status_file(uid):
+    return os.path.join(UPLOAD_FOLDER, uid, '_mail_auto_status.json')
+
+
+def _load_auto_status(uid):
+    try:
+        p = _status_file(uid)
+        if os.path.exists(p):
+            with open(p, encoding='utf-8') as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_auto_status(uid, ok, error=''):
+    """每次自动导入跑完(无论成功/部分失败/整体异常)都记一次,让用户能看到后台任务是否还活着。"""
+    with _mail_lock:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        status = _load_auto_status(uid)
+        status['last_run_at'] = now
+        if ok:
+            status['last_success_at'] = now
+            status['last_error'] = ''
+        else:
+            status['last_error'] = str(error)[:200]
+        p = _status_file(uid)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(status, f, ensure_ascii=False)
+        os.replace(tmp, p)
