@@ -71,8 +71,8 @@ def load_config(uid):
     return {}
 
 
-def save_config(uid, host=None, port=None, address=None, auth_code=None):
-    """auth_code: None=不改 / ''=清除 / 其他=替换。"""
+def save_config(uid, host=None, port=None, address=None, auth_code=None, auto_import=None):
+    """auth_code: None=不改 / ''=清除 / 其他=替换。auto_import: None=不改。"""
     with _mail_lock:
         old = load_config(uid)
         new = {
@@ -81,6 +81,7 @@ def save_config(uid, host=None, port=None, address=None, auth_code=None):
             'address': str(address if address is not None else old.get('address', '')).strip()[:100],
             'auth_code': ('' if auth_code == '' else
                           (str(auth_code).strip() if auth_code is not None else old.get('auth_code', ''))),
+            'auto_import': bool(auto_import) if auto_import is not None else bool(old.get('auto_import', False)),
         }
         if new['port'] <= 0 or new['port'] > 65535:
             new['port'] = 993
@@ -99,10 +100,16 @@ def save_config(uid, host=None, port=None, address=None, auth_code=None):
 
 def public_config(uid):
     cfg = load_config(uid)
+    status = _load_auto_status(uid)
     return {
         'host': cfg.get('host', ''), 'port': cfg.get('port', 993),
         'address': cfg.get('address', ''),
         'has_auth': bool(cfg.get('auth_code')),
+        'auto_import': bool(cfg.get('auto_import', False)),
+        'pending_count': pending_count(uid),
+        'last_run_at': status.get('last_run_at', ''),
+        'last_success_at': status.get('last_success_at', ''),
+        'last_error': status.get('last_error', ''),
         'presets': PRESETS,
     }
 
