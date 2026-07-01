@@ -590,3 +590,18 @@ def auto_import_one(uid, days=None):
 
     _save_auto_status(uid, ok=True)
     return {'imported': imported_count, 'pending': pending_new, 'error': None}
+
+
+def auto_import_all():
+    """后台定时任务入口:遍历全部用户,只处理开启了自动导入的;单个用户异常不影响其他用户。"""
+    from services.auth import list_users
+    for u in list_users():
+        uid = u['id']
+        cfg = load_config(uid)
+        if not cfg.get('auto_import'):
+            continue
+        try:
+            auto_import_one(uid)
+        except Exception:
+            logger.exception(f"自动导入用户 {uid} 执行异常")
+            _save_auto_status(uid, ok=False, error='自动导入执行异常,请查看后端日志')

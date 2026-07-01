@@ -1,3 +1,4 @@
+import services.auth as auth
 import services.mailbox as mailbox
 
 
@@ -77,3 +78,31 @@ def test_auto_import_one_records_error_when_fetch_fails(mail_uid, monkeypatch):
     assert '邮箱未配置完整' in result['error']
     status = mailbox._load_auto_status(uid)
     assert '邮箱未配置完整' in status['last_error']
+
+
+def test_auto_import_all_skips_disabled_and_isolates_failures(mail_uid, monkeypatch):
+    monkeypatch.setattr(auth, 'list_users', lambda: [
+        {'id': 'u1'}, {'id': 'u2'}, {'id': 'u3'},
+    ])
+    mailbox.save_config('u1', host='imap.qq.com', port=993, address='a@qq.com', auth_code='c',
+                        auto_import=True)
+    mailbox.save_config('u2', host='imap.qq.com', port=993, address='b@qq.com', auth_code='c',
+                        auto_import=True)
+    mailbox.save_config('u3', host='imap.qq.com', port=993, address='c@qq.com', auth_code='c',
+                        auto_import=False)
+
+    calls = []
+
+    def fake_auto_import_one(uid, days=None):
+        calls.append(uid)
+        if uid == 'u1':
+            raise RuntimeError('模拟 u1 自动导入崩了')
+        return {'imported': 0, 'pending': 0, 'error': None}
+
+    monkeypatch.setattr(mailbox, 'auto_import_one', fake_auto_import_one)
+
+    mailbox.auto_import_all()
+
+    assert calls == ['u1', 'u2']
+    status_u1 = mailbox._load_auto_status('u1')
+    assert '异常' in status_u1['last_error']
