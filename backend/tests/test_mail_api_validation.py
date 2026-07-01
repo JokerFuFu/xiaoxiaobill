@@ -82,3 +82,18 @@ def test_route_allows_clearing_auth_when_autoimport_not_enabling(monkeypatch):
         resp = mail_api.save_config()
     assert not (isinstance(resp, tuple) and len(resp) == 2 and resp[1] == 400)
     assert saved.get('kw', {}).get('auth_code') == ''
+
+
+def test_route_null_auth_code_does_not_500(monkeypatch):
+    """回归测试:显式 JSON null 的 auth_code({"auth_code": null})不应导致
+    data['auth_code'].strip() 在 None 上抛出 AttributeError(500)。应按空值处理并返回 400。"""
+    called = {}
+    monkeypatch.setattr(mail_api, 'get_current_uid', lambda: 'test_user')
+    monkeypatch.setattr(mail_api.mail_svc, 'load_config',
+                         lambda uid: {'host': 'imap.qq.com', 'address': 'a@qq.com', 'auth_code': 'oldcode'})
+    monkeypatch.setattr(mail_api.mail_svc, 'save_config',
+                         lambda *a, **k: called.setdefault('yes', True) or {})
+    with _ctx({'auto_import': True, 'auth_code': None}):
+        resp = mail_api.save_config()
+    assert isinstance(resp, tuple) and resp[1] == 400   # 配置不完整 → 400,而不是 500/AttributeError
+    assert 'yes' not in called
