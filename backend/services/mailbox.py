@@ -429,10 +429,13 @@ def import_attachment(uid, mail_uid, att_index, zip_password=None, member_id=Non
 
     with _mail_lock:
         imported = _load_imported(uid)
-        rec = imported.setdefault(str(mail_uid), {'files': [], 'at': ''})
+        rec = imported.setdefault(str(mail_uid), {'files': [], 'at': '', 'indices': []})
         rec['files'] = sorted(set(rec['files'] + saved))
+        rec.setdefault('indices', [])
+        rec['indices'] = sorted(set(rec['indices'] + [int(att_index)]))
         rec['at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         _save_imported(uid, imported)
+    _clear_pending_index(uid, mail_uid, int(att_index))
 
     logger.info(f"邮箱导入 {len(saved)} 个账单文件: {saved}")
     return {'files': saved}
