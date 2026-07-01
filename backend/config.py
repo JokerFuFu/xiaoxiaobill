@@ -88,3 +88,6 @@ LATTE_FACTOR_COUNT = 10       # 拿铁因子最少次数
 DEFAULT_PAGE = 1
 DEFAULT_PER_PAGE = 20
 MAX_PER_PAGE = 100
+
+# ============ 邮箱账单自动导入 ============
+MAIL_AUTO_IMPORT_INTERVAL_HOURS = int(os.environ.get('MAIL_AUTO_IMPORT_INTERVAL_HOURS', '24'))

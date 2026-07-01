@@ -165,6 +165,21 @@ register_new_frontend_routes()
 ensure_upload_dir()
 ensure_admin()  # 首次启动 bootstrap 管理员(uid=user_local,保留既有数据)
 
+# ============ 邮箱账单后台自动导入 ============
+from services.mailbox import should_start_mail_scheduler, auto_import_all
+from config import MAIL_AUTO_IMPORT_INTERVAL_HOURS
+
+if should_start_mail_scheduler(DEBUG, os.environ.get('WERKZEUG_RUN_MAIN')):
+    from apscheduler.schedulers.background import BackgroundScheduler
+    import atexit
+
+    _mail_scheduler = BackgroundScheduler(daemon=True)
+    _mail_scheduler.add_job(auto_import_all, 'interval', hours=MAIL_AUTO_IMPORT_INTERVAL_HOURS,
+                             id='mail_auto_import', misfire_grace_time=3600)
+    _mail_scheduler.start()
+    atexit.register(lambda: _mail_scheduler.shutdown(wait=False))
+    logger.info(f"邮箱自动导入定时任务已启动,每 {MAIL_AUTO_IMPORT_INTERVAL_HOURS} 小时执行一次")
+
 # ============ 前端路由 ============
 
 @app.route('/')

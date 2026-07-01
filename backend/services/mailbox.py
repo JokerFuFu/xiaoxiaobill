@@ -605,3 +605,11 @@ def auto_import_all():
         except Exception:
             logger.exception(f"自动导入用户 {uid} 执行异常")
             _save_auto_status(uid, ok=False, error='自动导入执行异常,请查看后端日志')
+
+
+def should_start_mail_scheduler(debug, werkzeug_run_main):
+    """决定当前进程是否应该启动后台定时任务。
+    生产环境(debug=False)只有一个进程,直接启动;开发环境 Flask debug 模式下
+    reloader 会额外起一个子进程,只在真正对外服务的子进程(WERKZEUG_RUN_MAIN=='true')里启动,
+    避免同一台机器上跑出两份定时任务。"""
+    return (not debug) or werkzeug_run_main == 'true'
