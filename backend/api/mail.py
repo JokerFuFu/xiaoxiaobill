@@ -45,7 +45,7 @@ def save_config():
     cur = mail_svc.load_config(uid)
     final_host = host or cur.get('host', '')
     final_address = address or cur.get('address', '')
-    final_auth = data.get('auth_code') or cur.get('auth_code', '')
+    final_auth = (data['auth_code'] if 'auth_code' in data else cur.get('auth_code', '')).strip()
     err = mail_svc.validate_auto_import_request(auto_import, final_host, final_address, final_auth)
     if err:
         return jsonify({'success': False, 'error': err}), 400
