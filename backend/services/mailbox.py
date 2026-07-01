@@ -541,3 +541,52 @@ def _save_auto_status(uid, ok, error=''):
         with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(status, f, ensure_ascii=False)
         os.replace(tmp, p)
+
+
+# ============ 自动导入:编排逻辑 ============
+AUTO_IMPORT_WINDOW_DAYS = 35  # 覆盖"半月到一个月才传一次账单"的使用习惯
+
+
+def auto_import_one(uid, days=None):
+    """对单个用户跑一轮自动导入。
+    能自动解压/解析的附件(银行 PDF、未加密 zip、csv/xlsx)直接导入;
+    加密 zip 解压失败(典型是支付宝密码随机、机器拿不到)不重试,记入待处理队列。
+    返回 {'imported': 本轮新导入的附件数, 'pending': 本轮新记入待处理的附件数, 'error': 失败原因或 None}。"""
+    days = days or AUTO_IMPORT_WINDOW_DAYS
+    session_dir = os.path.join(UPLOAD_FOLDER, uid)
+    try:
+        mails = fetch_bills(uid, days=days)
+    except Exception as e:
+        logger.warning(f"自动导入拉取邮件失败: uid={uid} err={e}")
+        _save_auto_status(uid, ok=False, error=str(e))
+        return {'imported': 0, 'pending': 0, 'error': str(e)}
+
+    imported_map = _load_imported(uid)
+    pending_map = _load_pending(uid)
+    imported_count = 0
+    pending_new = 0
+
+    for m in mails:
+        mail_uid = m['uid']
+        done_idx = set(imported_map.get(mail_uid, {}).get('indices', []))
+        pend_idx = set(pending_map.get(mail_uid, {}).get('indices', []))
+        for a in m['attachments']:
+            idx = a['index']
+            if idx in done_idx or idx in pend_idx:
+                continue
+            try:
+                import_attachment(uid, mail_uid, idx, zip_password=None, member_id=None,
+                                   session_dir=session_dir)
+                imported_count += 1
+            except ValueError:
+                if a.get('is_zip'):
+                    _mark_pending(uid, mail_uid, m, a)
+                    pending_new += 1
+                else:
+                    logger.warning(
+                        f"自动导入跳过附件(非密码类失败): uid={uid} mail_uid={mail_uid} idx={idx}")
+            except Exception:
+                logger.exception(f"自动导入附件异常: uid={uid} mail_uid={mail_uid} idx={idx}")
+
+    _save_auto_status(uid, ok=True)
+    return {'imported': imported_count, 'pending': pending_new, 'error': None}
