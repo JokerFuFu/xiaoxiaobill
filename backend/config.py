@@ -50,7 +50,9 @@ LOG_FILE = 'app.log'
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 # ============ 应用配置 ============
-DEBUG = True
+# 生产默认关闭:Flask debug=True 会暴露 Werkzeug 交互式调试器(经 /api 代理触发 500 即可 RCE)。
+# 由环境变量控制(docker-compose 传 DEBUG=False);本地开发需调试器/热重载时设 DEBUG=1。
+DEBUG = os.environ.get('DEBUG', 'False').strip().lower() in ('1', 'true', 'yes', 'on')
 HOST = '0.0.0.0'
 PORT = 5000  # Flask 默认端口，与 Docker 配置保持一致
 
