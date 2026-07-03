@@ -31,7 +31,7 @@ def test_auto_import_one_marks_encrypted_zip_as_pending(mail_uid, monkeypatch):
     monkeypatch.setattr(mailbox, 'fetch_bills', lambda u, days=90: [mail])
 
     def fake_import(u, mail_uid, idx, zip_password=None, member_id=None, session_dir=None):
-        raise ValueError('压缩包密码错误或未提供(支付宝/微信的账单包需要密码)')
+        raise mailbox.PasswordRequired('压缩包密码错误或未提供(支付宝/微信的账单包需要密码)')
 
     monkeypatch.setattr(mailbox, 'import_attachment', fake_import)
 

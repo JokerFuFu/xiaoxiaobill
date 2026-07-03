@@ -256,8 +256,9 @@
               <span class="att-size">{{ fmtSize(a.size) }}</span>
               <span v-if="a.needs_password" class="cfg-badge default">需要密码</span>
               <input
-                v-if="a.is_zip" v-model="zipPwd[m.uid + ':' + a.index]"
-                class="att-pwd" placeholder="zip 密码(如有)" autocomplete="off"
+                v-if="a.is_zip || a.needs_password || a.filename.toLowerCase().endsWith('.pdf')"
+                v-model="zipPwd[m.uid + ':' + a.index]"
+                class="att-pwd" placeholder="解压/打开密码(如有)" autocomplete="off"
               />
               <button
                 class="member-add-btn" :disabled="mailBusy === 'import'"

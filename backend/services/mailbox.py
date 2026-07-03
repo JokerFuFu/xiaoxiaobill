@@ -27,6 +27,13 @@ from config import UPLOAD_FOLDER
 logger = logging.getLogger(__name__)
 _mail_lock = threading.RLock()
 
+
+class PasswordRequired(ValueError):
+    """附件需要密码才能打开(加密 zip / 加密 PDF)。
+    继承 ValueError 以兼容现有 API 层的 except ValueError(仍返回 400);
+    编排层(auto_import_one)据此把附件记入待处理队列,而非当作普通失败跳过。"""
+
+
 PRESETS = [
     {'name': 'QQ 邮箱', 'host': 'imap.qq.com', 'port': 993,
      'help': '邮箱网页版 → 设置 → 账号 → 开启 IMAP/SMTP 服务 → 生成授权码'},
@@ -373,16 +380,44 @@ def _extract_zip(raw, password=None):
                 data = zf.read(info)
             except RuntimeError as e:
                 if 'password' in str(e).lower() or 'Bad password' in str(e):
-                    raise ValueError('压缩包密码错误或未提供(支付宝/微信的账单包需要填密码)')
+                    raise PasswordRequired('压缩包密码错误或未提供(支付宝/微信的账单包需要填密码)')
                 raise
             except Exception as e:
                 if 'Bad password' in str(e) or 'password' in str(e).lower():
-                    raise ValueError('压缩包密码错误或未提供(支付宝/微信的账单包需要填密码)')
+                    raise PasswordRequired('压缩包密码错误或未提供(支付宝/微信的账单包需要填密码)')
                 raise
             out.append((_safe_name(os.path.basename(name)), data))
     if not out:
         raise ValueError('压缩包里没有可导入的账单文件(csv/xlsx/pdf)')
     return out
+
+
+def _decrypt_pdf_if_needed(raw, password=None):
+    """PDF 若加密:优先空密码(未加密 或 仅所有者加密的空用户口令),否则用 password 解密;
+    解密后去掉加密另存返回(pdfminer/pdfplumber 才能稳定读取)。未加密的 PDF 原样返回,
+    不做多余重写;打不开则抛 PasswordRequired(交由上层记入待处理/提示补密码)。"""
+    import pikepdf
+
+    def _resave(pw):
+        with pikepdf.open(io.BytesIO(raw), password=pw) as pdf:
+            if not pdf.is_encrypted:
+                return raw  # 无加密,原样返回
+            out = io.BytesIO()
+            pdf.save(out)  # 去加密另存
+            return out.getvalue()
+
+    try:
+        return _resave('')  # 空密码:未加密 或 仅所有者加密
+    except pikepdf.PasswordError:
+        pass  # 确实加密,需要用户密码,走下面的分支
+    except Exception:
+        return raw  # pikepdf 打不开但非密码原因(不支持的结构等):原样交给后续 pdfplumber 尝试,不误伤
+    if not password:
+        raise PasswordRequired('PDF 已加密,需要打开密码')
+    try:
+        return _resave(str(password))
+    except pikepdf.PasswordError:
+        raise PasswordRequired('PDF 打开密码错误')
 
 
 def import_attachment(uid, mail_uid, att_index, zip_password=None, member_id=None, session_dir=None):
@@ -414,11 +449,27 @@ def import_attachment(uid, mail_uid, att_index, zip_password=None, member_id=Non
     else:
         files = [(_safe_name(fname), raw)]
 
+    # 加密 PDF(部分银行邮件账单,如中国银行):无论来自 zip 还是直接附件,带打开密码的 PDF
+    # 用同一密码字段尝试解密,打不开抛 PasswordRequired -> 自动导入据此记入待处理、手动可补密码。
+    # 局限:只有一个密码输入,故"加密 zip(密码A) 里再套一个不同密码B 的加密 PDF"无法一次补齐
+    # (会一直停在待处理);现实中支付宝/微信 zip 装的是 csv/xlsx、银行加密 PDF 是直接附件,不触发该组合。
+    _dec = []
+    for fn, data in files:
+        if fn.lower().endswith('.pdf'):
+            data = _decrypt_pdf_if_needed(data, zip_password)
+        _dec.append((fn, data))
+    files = _dec
+
     saved = []
     for fn, data in files:
         path, real_name = _unique_path(session_dir, fn)
         with open(path, 'wb') as f:
             f.write(data)
+        try:
+            # 账单含账号/姓名/流水,尤其是从加密 PDF 解密后落盘的明文,按项目 0600 敏感文件约定收紧权限
+            os.chmod(path, 0o600)
+        except Exception:
+            pass
         saved.append(real_name)
 
     # 成员归属(整份文件归一个成员,与手工上传一致)
@@ -552,8 +603,9 @@ AUTO_IMPORT_WINDOW_DAYS = 35  # 覆盖"半月到一个月才传一次账单"的�
 
 def auto_import_one(uid, days=None):
     """对单个用户跑一轮自动导入。
-    能自动解压/解析的附件(银行 PDF、未加密 zip、csv/xlsx)直接导入;
-    加密 zip 解压失败(典型是支付宝密码随机、机器拿不到)不重试,记入待处理队列。
+    能自动解压/解析的附件(未加密银行 PDF、未加密 zip、csv/xlsx)直接导入;
+    需要密码的附件(加密 zip / 加密 PDF,如支付宝随机密码、中国银行加密对账单)不猜密码,
+    记入待处理队列,等用户在设置页手动补密码完成导入。
     返回 {'imported': 本轮新导入的附件数, 'pending': 本轮新记入待处理的附件数, 'error': 失败原因或 None}。"""
     days = days or AUTO_IMPORT_WINDOW_DAYS
     session_dir = os.path.join(UPLOAD_FOLDER, uid)
@@ -581,13 +633,13 @@ def auto_import_one(uid, days=None):
                 import_attachment(uid, mail_uid, idx, zip_password=None, member_id=None,
                                    session_dir=session_dir)
                 imported_count += 1
+            except PasswordRequired:
+                # 加密 zip 或加密 PDF:不猜密码,记入待处理队列,等用户手动补密码
+                _mark_pending(uid, mail_uid, m, a)
+                pending_new += 1
             except ValueError:
-                if a.get('is_zip'):
-                    _mark_pending(uid, mail_uid, m, a)
-                    pending_new += 1
-                else:
-                    logger.warning(
-                        f"自动导入跳过附件(非密码类失败): uid={uid} mail_uid={mail_uid} idx={idx}")
+                logger.warning(
+                    f"自动导入跳过附件(非密码类失败): uid={uid} mail_uid={mail_uid} idx={idx}")
             except Exception:
                 logger.exception(f"自动导入附件异常: uid={uid} mail_uid={mail_uid} idx={idx}")
 

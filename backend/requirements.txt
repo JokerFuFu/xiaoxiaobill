@@ -24,6 +24,8 @@ requests>=2.28.0
 
 # 邮箱取账单:解压加密 zip(支付宝/微信账单包,ZipCrypto+AES)
 pyzipper>=0.3.6
+# 邮箱取账单:解密带打开密码的银行 PDF(如中国银行加密对账单)
+pikepdf>=8.0.0
 
 # 测试
 pytest>=7.4.0,<8.0.0
