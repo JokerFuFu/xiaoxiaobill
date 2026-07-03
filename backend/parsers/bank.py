@@ -46,14 +46,20 @@ def _parse_minsheng(pdf, bank='中国民生银行', card=None):
     if not card:
         card = _card_from_text(pdf.pages[0].extract_text() if pdf.pages else '')
     out = []
+    # 兼容两种民生对账单排版:①每行以日期开头;②每行以「卡 <卡号> 」前缀开头(卡号可能折行到下一行),
+    #   且日期后带 现转标志/交易渠道/交易机构/对方户名 等尾列。前缀与尾列均设为可选,两种格式通吃。
     for pg in pdf.pages:
         for line in (pg.extract_text() or '').splitlines():
-            m = re.match(r'^(\d{4}/\d{2}/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.+?)\s+(-?[\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+(\S+)(?:\s+(\S+))?\s*$', line)
+            m = re.match(
+                r'^(?:卡\s+\d+\s+)?(\d{4}/\d{2}/\d{2})\s+(\d{2}:\d{2}:\d{2})\s+(.+?)\s+'
+                r'(-?[\d,]+\.\d{2})\s+([\d,]+\.\d{2})'
+                r'(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(.+?))?\s*$', line)
             if not m:
                 continue
-            d, t, summ, amt, bal, cashflag, chan = m.groups()
+            d, t, summ, amt, bal, cashflag, chan, org, party = m.groups()
             out.append(dict(bank=bank, card=card, dt=datetime.strptime(d + ' ' + t, '%Y/%m/%d %H:%M:%S'),
-                            amount=_num(amt), summary=summ.strip(), party='', balance=_num(bal)))
+                            amount=_num(amt), summary=summ.strip(),
+                            party=(party or '').split('/')[0].strip(), balance=_num(bal)))
     return out
 
 
