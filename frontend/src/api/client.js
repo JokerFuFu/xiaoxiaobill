@@ -200,10 +200,17 @@ export const api = {
   networthDeleteSnapshot: (date) => delete_(`/networth/snapshots/${date}`)
 }
 
-// 401 未登录 → 跳登录页(登录页本身不跳,避免循环)
+// 是否应因 401 跳登录页(登录页本身不跳,避免循环)。纯函数,便于测试。
+export function shouldRedirectToLogin(status, pathname) {
+  return status === 401 && !pathname.startsWith('/login')
+}
+
+// 401 未登录 → 走 vue-router 跳登录页(保留浏览器历史,SPA 内导航)。
+// router 用函数内动态 import,避开 router→auth→client 的循环依赖;
+// 导航为异步(fire-and-forget),throw 仍同步执行以中断当前请求流程。
 function _check401(response) {
-  if (response.status === 401 && !window.location.pathname.startsWith('/login')) {
-    window.location.href = '/login'
+  if (shouldRedirectToLogin(response.status, window.location.pathname)) {
+    import('@/router').then(({ default: router }) => router.push('/login'))
     throw new Error('未登录')
   }
 }
