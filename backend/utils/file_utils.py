@@ -35,8 +35,9 @@ def detect_file_source(filepath):
                 return 'wechat'
             if ('银行对账单转换' in content) or ('PDF转支付宝样式' in content) or ('PDF 对账单转换' in content):
                 return 'bank-csv'
-        except:
-            pass
+        except Exception as e:
+            # 探测失败(编码异常/读取错误等)不阻断,回退按支付宝处理
+            logger.debug(f"detect_file_source 读取失败,回退 alipay: {e}")
         return 'alipay'
     return 'unknown'
 

@@ -960,5 +960,6 @@ def calculate_change_rate(current, previous):
         if current == 0:
             return -100
         return round((current - previous) / abs(previous) * 100, 2)
-    except:
+    except (TypeError, ValueError):
+        # 非数值入参(如 None/字符串)→ 视为无法计算
         return None
