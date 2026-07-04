@@ -32,10 +32,7 @@ def parse_alipay_csv(filepath):
                 lines = f.readlines()
 
         header_row = None
-        status_row = None
         for i, line in enumerate(lines):
-            if '交易状态' in line and not status_row:
-                status_row = i
             if '交易时间' in line:
                 header_row = i
                 break
@@ -46,22 +43,25 @@ def parse_alipay_csv(filepath):
         # 读取数据
         try:
             df = pd.read_csv(filepath, encoding='gbk', skiprows=header_row)
-            status_df = pd.read_csv(filepath, encoding='gbk', skiprows=status_row, nrows=1)
         except UnicodeDecodeError:
             df = pd.read_csv(filepath, encoding='utf-8', skiprows=header_row)
-            status_df = pd.read_csv(filepath, encoding='utf-8', skiprows=status_row, nrows=1)
-
-        # 获取状态列名
-        status_column = status_df.columns[0]
 
         # 数据预处理
         df['交易时间'] = pd.to_datetime(df['交易时间'])
         df['月份'] = df['交易时间'].dt.strftime('%Y-%m')
         df['日期'] = df['交易时间'].dt.strftime('%Y-%m-%d')
 
-        # 标记交易状态
-        df['是否退款'] = df[status_column].isin(['退款成功', '交易关闭'])
-        df.loc[df['是否退款'], '金额'] = -df.loc[df['是否退款'], '金额']
+        # 标记退款/关闭并把金额取负。
+        # 修复:原实现用 status_df.columns[0] 取到的是「交易时间」列(表头首列),
+        # 导致 isin 判定恒 False、退款从不取负。改为直接定位「交易状态」列
+        # (标准列名即 '交易状态';个别导出变体按包含 '状态' 兜底)。
+        status_column = '交易状态' if '交易状态' in df.columns else next(
+            (c for c in df.columns if '状态' in str(c)), None)
+        if status_column:
+            df['是否退款'] = df[status_column].astype(str).str.strip().isin(['退款成功', '交易关闭'])
+            df.loc[df['是否退款'], '金额'] = -df.loc[df['是否退款'], '金额']
+        else:
+            df['是否退款'] = False
 
         # 添加来源标识
         df['来源'] = '支付宝'

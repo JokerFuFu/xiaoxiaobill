@@ -1,8 +1,8 @@
 """支付宝 CSV 解析器契约测试。fixture 为脱敏构造样本(GBK 编码,仿支付宝导出格式)。
 
-说明:退款金额取负逻辑存在已知缺陷(status_column 误取到 columns[0]='交易时间',
-导致 df['交易状态'] 判定失效),该缺陷的修复 + 退款回归测试放在 Phase 1「修问题」。
-本文件只锁定当前稳固的既有行为(来源标签、必备列、时间 dtype)。
+覆盖:来源标签、必备列、时间 dtype、方向取值,以及退款金额取负。
+注:退款检测此前有缺陷(status_column 误取 columns[0]='交易时间' 使判定恒 False),
+已在 Phase 1 修复为直接定位「交易状态」列,退款回归见 test_parse_alipay_refund_amount_is_negative。
 """
 import os
 
@@ -29,3 +29,12 @@ def test_parse_alipay_direction_values_valid():
     df = parse_alipay_csv(FIXTURE)
     # 方向(收/支)取值应落在合法集合内
     assert set(df['收/支'].unique()) <= {'支出', '收入', '不计收支', '/'}
+
+
+def test_parse_alipay_refund_amount_is_negative():
+    """样本含一条「退款成功」记录,应被标记退款且金额取负(此前 status_column 误取
+    交易时间列导致检测失效,Phase 1 修复)。"""
+    df = parse_alipay_csv(FIXTURE)
+    refunds = df[df['是否退款']]
+    assert len(refunds) >= 1
+    assert (refunds['金额'] <= 0).all()
