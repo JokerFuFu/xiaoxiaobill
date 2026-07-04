@@ -3,13 +3,15 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  // 生产构建剔除 console/debugger(仅 build 生效,dev 保留调试输出)
+  esbuild: command === 'build' ? { drop: ['console', 'debugger'] } : {},
   server: {
     port: 3000,
     proxy: {
@@ -35,4 +37,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))
