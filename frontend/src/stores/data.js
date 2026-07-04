@@ -83,16 +83,9 @@ export const useDataStore = defineStore('data', () => {
    */
   async function loadAvailableYears() {
     try {
-      console.log('[DataStore] Loading available years...')
       const result = await api.getAvailableYears()
-      console.log('[DataStore] API result:', result)
-
-      // 处理不同的响应格式
-      // 可能是 { years: [...] } 或直接的数组 [...]
-      const years = Array.isArray(result) ? result : (result.years || [])
-      console.log('[DataStore] Available years:', years)
-
-      availableYears.value = years
+      // 后端 /api/available_years 统一返回 { success, years:[...] },经 client 解包后为 { years:[...] }
+      availableYears.value = result.years || []
       return availableYears.value
     } catch (error) {
       console.error('[DataStore] 加载可用年份失败:', error)
