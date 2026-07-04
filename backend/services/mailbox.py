@@ -620,6 +620,7 @@ def auto_import_one(uid, days=None):
     pending_map = _load_pending(uid)
     imported_count = 0
     pending_new = 0
+    failed = 0  # 非密码类失败(损坏/无可导入内容/异常)——用于把"部分失败"体现到同步状态
 
     for m in mails:
         mail_uid = m['uid']
@@ -638,12 +639,18 @@ def auto_import_one(uid, days=None):
                 _mark_pending(uid, mail_uid, m, a)
                 pending_new += 1
             except ValueError:
+                failed += 1
                 logger.warning(
                     f"自动导入跳过附件(非密码类失败): uid={uid} mail_uid={mail_uid} idx={idx}")
             except Exception:
+                failed += 1
                 logger.exception(f"自动导入附件异常: uid={uid} mail_uid={mail_uid} idx={idx}")
 
-    _save_auto_status(uid, ok=True)
+    # 部分失败也让用户可见:有任一附件失败则本轮标记非成功 + 摘要,而非一律 ok=True
+    if failed:
+        _save_auto_status(uid, ok=False, error=f"{failed} 个附件本轮导入失败(详见日志)")
+    else:
+        _save_auto_status(uid, ok=True)
     return {'imported': imported_count, 'pending': pending_new, 'error': None}
 
 

@@ -170,15 +170,19 @@ from services.mailbox import should_start_mail_scheduler, auto_import_all
 from config import MAIL_AUTO_IMPORT_INTERVAL_HOURS
 
 if should_start_mail_scheduler(DEBUG, os.environ.get('WERKZEUG_RUN_MAIN')):
-    from apscheduler.schedulers.background import BackgroundScheduler
-    import atexit
+    # 调度器启动故障(缺依赖/异常)只应让"自动导入"不可用,绝不拖垮整个应用启动
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        import atexit
 
-    _mail_scheduler = BackgroundScheduler(daemon=True)
-    _mail_scheduler.add_job(auto_import_all, 'interval', hours=MAIL_AUTO_IMPORT_INTERVAL_HOURS,
-                             id='mail_auto_import', misfire_grace_time=3600)
-    _mail_scheduler.start()
-    atexit.register(lambda: _mail_scheduler.shutdown(wait=False))
-    logger.info(f"邮箱自动导入定时任务已启动,每 {MAIL_AUTO_IMPORT_INTERVAL_HOURS} 小时执行一次")
+        _mail_scheduler = BackgroundScheduler(daemon=True)
+        _mail_scheduler.add_job(auto_import_all, 'interval', hours=MAIL_AUTO_IMPORT_INTERVAL_HOURS,
+                                 id='mail_auto_import', misfire_grace_time=3600)
+        _mail_scheduler.start()
+        atexit.register(lambda: _mail_scheduler.shutdown(wait=False))
+        logger.info(f"邮箱自动导入定时任务已启动,每 {MAIL_AUTO_IMPORT_INTERVAL_HOURS} 小时执行一次")
+    except Exception:
+        logger.exception("邮箱自动导入定时任务启动失败,应用继续运行(自动导入暂不可用)")
 
 # ============ 前端路由 ============
 

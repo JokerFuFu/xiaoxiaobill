@@ -80,6 +80,41 @@ def test_auto_import_one_records_error_when_fetch_fails(mail_uid, monkeypatch):
     assert '邮箱未配置完整' in status['last_error']
 
 
+def test_auto_import_one_partial_failure_surfaces_in_status(mail_uid, monkeypatch):
+    """某附件非密码类异常失败时,本轮同步状态应标记非成功(部分失败可见,而非一律 ok=True)。"""
+    uid = mail_uid
+    mail = _fake_mail('9', [{'index': 0, 'filename': 'broken.csv', 'size': 10, 'is_zip': False}])
+    monkeypatch.setattr(mailbox, 'fetch_bills', lambda u, days=90: [mail])
+
+    def boom_import(u, mail_uid, idx, zip_password=None, member_id=None, session_dir=None):
+        raise RuntimeError('模拟解析崩溃')
+
+    monkeypatch.setattr(mailbox, 'import_attachment', boom_import)
+
+    result = mailbox.auto_import_one(uid)
+
+    # 返回契约不变(部分失败只体现在同步状态,不改 result 结构)
+    assert result == {'imported': 0, 'pending': 0, 'error': None}
+    status = mailbox._load_auto_status(uid)
+    assert status.get('last_error')          # 失败被记录
+    assert not status.get('last_success_at')  # 本轮未标记为成功
+
+
+def test_auto_import_one_clean_run_marks_success(mail_uid, monkeypatch):
+    """全部成功时应标记 last_success_at 且清空 last_error。"""
+    uid = mail_uid
+    mail = _fake_mail('10', [{'index': 0, 'filename': 'ok.csv', 'size': 10, 'is_zip': False}])
+    monkeypatch.setattr(mailbox, 'fetch_bills', lambda u, days=90: [mail])
+    monkeypatch.setattr(mailbox, 'import_attachment',
+                        lambda *a, **k: {'files': ['ok.csv']})
+
+    mailbox.auto_import_one(uid)
+
+    status = mailbox._load_auto_status(uid)
+    assert status.get('last_success_at')
+    assert status.get('last_error', '') == ''
+
+
 def test_auto_import_all_skips_disabled_and_isolates_failures(mail_uid, monkeypatch):
     monkeypatch.setattr(auth, 'list_users', lambda: [
         {'id': 'u1'}, {'id': 'u2'}, {'id': 'u3'},
