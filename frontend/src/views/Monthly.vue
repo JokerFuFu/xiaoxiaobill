@@ -444,17 +444,6 @@ function initTrendChart() {
   }
 
   trendChart.setOption(option, true)
-
-  // 绑定点击事件 - 查看当天交易明细
-  trendChart.off('click')
-  trendChart.on('click', (params) => {
-    if (params.componentType === 'series') {
-      const date = params.name
-      console.log('[Monthly] Clicked on date:', date)
-      // 这里可以打开交易明细模态框或跳转到交易页面
-      // TODO: 实现点击查看明细功能
-    }
-  })
 }
 
 function initCategoryChart() {
