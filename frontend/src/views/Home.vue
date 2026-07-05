@@ -28,19 +28,10 @@
 
     <!-- AI 主视觉 + 仪表盘 -->
     <template v-else>
-      <!-- AI 助手主视觉(首页顶部大卡片) -->
+      <!-- AI 助手主视觉(首页顶部,AI 原生:居中问候 + 大输入 + 快捷提示) -->
       <section class="ai-hero">
-        <div class="ai-hero-head">
-          <div class="ai-hero-title">
-            <span class="ai-hero-badge"><i class="fas fa-robot"></i></span>
-            <div>
-              <h2>问问 AI 你的账单</h2>
-              <p>用大白话提问，随手看穿这个月钱花在哪、哪笔不对劲</p>
-            </div>
-          </div>
-          <router-link to="/ai" class="ai-hero-link">完整版 <i class="fas fa-up-right-from-square"></i></router-link>
-        </div>
-        <div class="ai-hero-chat">
+        <router-link to="/ai" class="ai-hero-full" title="打开完整 AI 助手">完整版 <i class="fas fa-up-right-from-square"></i></router-link>
+        <div class="ai-hero-inner">
           <MiniChat />
         </div>
       </section>
@@ -155,16 +146,6 @@
           </div>
         </div>
 
-        <!-- 右:AI 对话 -->
-        <div class="dash-right">
-          <div class="card chat-card">
-            <div class="card-head">
-              <h3><i class="fas fa-robot" style="color:#AF52DE"></i> AI 助手</h3>
-              <router-link to="/ai" class="mini-link">完整版 <i class="fas fa-up-right-from-square"></i></router-link>
-            </div>
-            <MiniChat />
-          </div>
-        </div>
       </div>
     </template>
 
@@ -365,7 +346,7 @@ onUnmounted(() => { window.removeEventListener('resize', onResize); trendChart &
 .kpi-link { color: #007AFF; text-decoration: none; }
 
 /* 仪表盘网格 */
-.dash-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px; align-items: start; }
+.dash-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
 @media (max-width: 1000px) { .dash-grid { grid-template-columns: 1fr; } }
 .dash-left { display: flex; flex-direction: column; gap: 14px; }
 
@@ -449,58 +430,30 @@ onUnmounted(() => { window.removeEventListener('resize', onResize); trendChart &
 .add-cat { margin-top: 4px; border: 1px dashed #c9d8ec; background: #f7fafe; color: #007AFF; border-radius: 9px; height: 36px; width: 100%; cursor: pointer; font-size: 13px; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid #f0f0f4; }
 
-/* AI 助手首页主视觉(置顶放大) */
+/* AI 助手首页主视觉(AI 原生:居中、留白、弱边框,无卡片硬框) */
 .ai-hero {
-  background: linear-gradient(135deg, #eef4ff 0%, var(--card-bg, #fff) 62%);
-  border: 1px solid var(--border-color, #ececf2);
-  border-radius: var(--radius-lg, 16px);
-  padding: var(--space-xl, 20px);
-  margin-bottom: var(--space-lg, 16px);
-  box-shadow: var(--shadow-card);
+  position: relative;
+  max-width: 780px;
+  margin: 8px auto 22px;
+  padding: 26px 24px 20px;
 }
-.ai-hero-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md, 12px);
-  margin-bottom: var(--space-lg, 16px);
-}
-.ai-hero-title { display: flex; align-items: center; gap: var(--space-md, 12px); }
-.ai-hero-badge {
-  width: 46px;
-  height: 46px;
-  border-radius: var(--radius-md, 12px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--primary-color, #007AFF);
-  color: #fff;
-  font-size: var(--fs-xl, 18px);
-  flex-shrink: 0;
-}
-.ai-hero-title h2 {
-  font-size: var(--fs-2xl, 22px);
-  font-weight: 650;
-  color: var(--text-color, #1d1d1f);
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-.ai-hero-title p {
+.ai-hero-full {
+  position: absolute;
+  top: 6px;
+  right: 6px;
   font-size: var(--fs-sm, 13px);
   color: var(--secondary-text, #86868b);
-  margin: 3px 0 0;
-}
-.ai-hero-link {
-  font-size: var(--fs-sm, 13px);
-  color: var(--primary-color, #007AFF);
   text-decoration: none;
-  white-space: nowrap;
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  transition: all var(--transition-fast, 0.15s ease);
 }
-.ai-hero-link:hover { text-decoration: underline; }
+.ai-hero-full:hover { color: var(--primary-color, #007AFF); background: var(--hover-bg, #f5f5f7); }
 
 @media (max-width: 768px) {
-  .ai-hero { padding: var(--space-lg, 16px); }
-  .ai-hero-head { flex-direction: column; align-items: flex-start; }
+  .ai-hero { padding: 20px 14px; margin-bottom: 16px; }
 }
 </style>

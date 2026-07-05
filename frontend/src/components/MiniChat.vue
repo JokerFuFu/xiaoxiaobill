@@ -1,20 +1,11 @@
 <template>
-  <div class="mini-chat">
+  <div class="mini-chat" :class="{ 'mc-hero': !messages.length }">
     <div ref="msgBox" class="mc-messages">
-      <!-- 空态:欢迎 + 示例 -->
+      <!-- 空态:居中问候(AI 原生) -->
       <div v-if="!messages.length" class="mc-empty">
-        <div class="mc-hello">
-          <span class="mc-logo"><img src="/images/logo_128.png" alt="" /></span>
-          <div>
-            <div class="mc-hello-title">问问你的账单</div>
-            <div class="mc-hello-sub">{{ enabled ? '用大白话问消费、收入、趋势,我直接查你的真实数据回答' : 'AI 未配置,去「设置 → AI 与模型」填个模型即可启用' }}</div>
-          </div>
-        </div>
-        <div v-if="enabled" class="mc-examples">
-          <button v-for="e in examples" :key="e.q" class="mc-example" @click="send(e.q)">
-            <i :class="e.icon"></i> {{ e.q }}
-          </button>
-        </div>
+        <span class="mc-logo"><img src="/images/logo_128.png" alt="" /></span>
+        <div class="mc-hello-title">问问你的账单</div>
+        <div class="mc-hello-sub">{{ enabled ? '用大白话问消费、收入、趋势,我直接查你的真实数据回答' : 'AI 未配置,去「设置 → AI 与模型」填个模型即可启用' }}</div>
       </div>
 
       <!-- 消息 -->
@@ -50,6 +41,13 @@
       ></textarea>
       <button v-if="loading" class="mc-send stop" @click="stop" title="停止"><i class="fas fa-stop"></i></button>
       <button v-else class="mc-send" :disabled="!enabled || !input.trim()" @click="send()" title="发送"><i class="fas fa-paper-plane"></i></button>
+    </div>
+
+    <!-- 快捷提示(仅空态且已启用,置于输入下方,居中排布) -->
+    <div v-if="!messages.length && enabled" class="mc-examples">
+      <button v-for="e in examples" :key="e.q" class="mc-example" @click="send(e.q)">
+        <i :class="e.icon"></i> {{ e.q }}
+      </button>
     </div>
   </div>
 </template>
@@ -155,19 +153,24 @@ defineExpose({ send })
 
 <style scoped>
 .mini-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* AI 原生空态:自适应高度、内容居中、留白充足 */
+.mini-chat.mc-hero { height: auto; }
 .mc-messages { flex: 1; overflow-y: auto; padding: 4px 2px 8px; min-height: 0; }
+.mc-hero .mc-messages { flex: none; overflow: visible; padding: 8px 4px 4px; }
 
-.mc-empty { padding: 8px 4px; }
-.mc-hello { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+/* 居中问候 */
+.mc-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 12px 4px 20px; }
 .mc-logo img, .mc-avatar img { width: 34px; height: 34px; border-radius: 50%; object-fit: contain; background: #f3eefd; }
-.mc-hello-title { font-size: 16px; font-weight: 600; color: #1d1d1f; }
-.mc-hello-sub { font-size: 13px; color: #8a8a8f; margin-top: 2px; line-height: 1.5; }
-.mc-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-@media (max-width: 600px) { .mc-examples { grid-template-columns: 1fr; } }
+.mc-empty .mc-logo img { width: 52px; height: 52px; box-shadow: 0 4px 14px rgba(123, 97, 255, 0.18); }
+.mc-hello-title { font-size: 22px; font-weight: 650; color: #1d1d1f; letter-spacing: -0.01em; }
+.mc-hello-sub { font-size: 13px; color: #8a8a8f; line-height: 1.5; max-width: 480px; }
+
+/* 快捷提示胶囊:居中、可换行,置于输入框下方 */
+.mc-examples { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding-top: 12px; }
 .mc-example {
-  display: flex; align-items: center; gap: 8px; text-align: left;
-  border: 1px solid #ececf2; background: #fbfbfd; color: #3a3a3c; border-radius: 11px;
-  padding: 10px 12px; font-size: 13px; cursor: pointer; transition: all .15s;
+  display: inline-flex; align-items: center; gap: 7px; text-align: left;
+  border: 1px solid #ececf2; background: #fbfbfd; color: #3a3a3c; border-radius: 999px;
+  padding: 8px 14px; font-size: 13px; cursor: pointer; transition: all .15s;
 }
 .mc-example i { color: #AF52DE; }
 .mc-example:hover { border-color: #AF52DE; background: #faf6ff; }
@@ -203,12 +206,16 @@ defineExpose({ send })
 .mc-md :deep(code) { background: #eef0f4; border-radius: 4px; padding: 1px 5px; font-size: 12.5px; }
 
 .mc-composer { display: flex; gap: 8px; align-items: flex-end; padding-top: 8px; border-top: 1px solid #f0f0f4; }
+/* AI 原生空态:输入框浮起、无上边框、更大圆角 */
+.mc-hero .mc-composer { border-top: none; padding-top: 0; }
 .mc-input {
   flex: 1; resize: none; border: 1px solid #e2e2e8; border-radius: 12px; padding: 10px 13px;
   font-size: 14px; line-height: 1.5; outline: none; font-family: inherit; max-height: 120px;
-  transition: border-color .15s;
+  transition: border-color .15s, box-shadow .15s;
 }
+.mc-hero .mc-input { border-radius: 16px; padding: 14px 16px; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.05); }
 .mc-input:focus { border-color: #AF52DE; }
+.mc-hero .mc-input:focus { box-shadow: 0 2px 14px rgba(175, 82, 222, 0.14); }
 .mc-send {
   flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 12px; cursor: pointer;
   background: linear-gradient(135deg, #AF52DE, #7B61FF); color: #fff; font-size: 15px; transition: opacity .15s;
