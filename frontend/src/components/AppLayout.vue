@@ -41,62 +41,54 @@
       </div>
 
       <nav class="nav-menu">
-        <router-link to="/" class="nav-item" :class="{ active: $route.path === '/' }">
-          <i class="fas fa-home icon-home"></i>
-          <span>首页</span>
-        </router-link>
-        <!-- 数据分析(二级菜单) -->
-        <div class="nav-group">
-          <button class="nav-item nav-parent" :class="{ active: $route.path === '/analysis' }" @click="toggleAnalysis">
-            <i class="fas fa-chart-pie icon-analysis"></i>
-            <span>数据分析</span>
-            <i class="fas fa-chevron-down nav-caret" :class="{ open: analysisOpen }"></i>
+        <!-- 分组导航:每组标题可点击折叠,折叠状态记忆到 localStorage -->
+        <div v-for="group in navGroups" :key="group.key" class="nav-section">
+          <!-- 分组标题(带展开/收起箭头) -->
+          <button
+            class="nav-section-title"
+            @click="toggleGroup(group.key)"
+            :aria-expanded="isGroupOpen(group.key) ? 'true' : 'false'"
+          >
+            <span>{{ group.label }}</span>
+            <i class="fas fa-chevron-down nav-section-caret" :class="{ open: isGroupOpen(group.key) }"></i>
           </button>
-          <div class="subnav" v-show="analysisOpen || $route.path === '/analysis'">
-            <router-link
-              v-for="s in analysisTabs" :key="s.key"
-              :to="`/analysis?tab=${s.key}`"
-              class="subnav-item"
-              :class="{ active: $route.path === '/analysis' && currentTab === s.key }"
-            >{{ s.label }}</router-link>
+
+          <!-- 分组内的导航项 -->
+          <div class="nav-section-body" v-show="isGroupOpen(group.key)">
+            <template v-for="item in group.items" :key="item.path">
+              <!-- 「数据分析」保留原二级菜单交互 -->
+              <div v-if="item.path === '/analysis'" class="nav-group">
+                <button
+                  class="nav-item nav-parent"
+                  :class="{ active: $route.path === '/analysis' }"
+                  @click="toggleAnalysis"
+                >
+                  <i class="fas fa-chart-pie icon-analysis"></i>
+                  <span>数据分析</span>
+                  <i class="fas fa-chevron-down nav-caret" :class="{ open: analysisOpen }"></i>
+                </button>
+                <div class="subnav" v-show="analysisOpen || $route.path === '/analysis'">
+                  <router-link
+                    v-for="s in analysisTabs" :key="s.key"
+                    :to="`/analysis?tab=${s.key}`"
+                    class="subnav-item"
+                    :class="{ active: $route.path === '/analysis' && currentTab === s.key }"
+                  >{{ s.label }}</router-link>
+                </div>
+              </div>
+              <!-- 普通导航项(admin 项按权限显示) -->
+              <router-link
+                v-else-if="!item.adminOnly || authStore.isAdmin"
+                :to="item.path"
+                class="nav-item"
+                :class="{ active: $route.path === item.path }"
+              >
+                <i :class="item.icon"></i>
+                <span>{{ item.label }}</span>
+              </router-link>
+            </template>
           </div>
         </div>
-        <router-link to="/networth" class="nav-item" :class="{ active: $route.path === '/networth' }">
-          <i class="fas fa-scale-balanced icon-networth"></i>
-          <span>资产负债</span>
-        </router-link>
-        <router-link to="/insights" class="nav-item" :class="{ active: $route.path === '/insights' }">
-          <i class="fas fa-lightbulb icon-insights"></i>
-          <span>消费洞察</span>
-        </router-link>
-        <router-link to="/annual" class="nav-item" :class="{ active: $route.path === '/annual' }">
-          <i class="fas fa-gift icon-annual"></i>
-          <span>年度账单</span>
-        </router-link>
-        <router-link to="/transactions" class="nav-item" :class="{ active: $route.path === '/transactions' }">
-          <i class="fas fa-receipt icon-transactions"></i>
-          <span>交易记录</span>
-        </router-link>
-        <router-link to="/transfers" class="nav-item" :class="{ active: $route.path === '/transfers' }">
-          <i class="fas fa-exchange-alt icon-transfers"></i>
-          <span>转账记录</span>
-        </router-link>
-        <router-link to="/ai" class="nav-item" :class="{ active: $route.path === '/ai' }">
-          <i class="fas fa-robot icon-ai"></i>
-          <span>AI 助手</span>
-        </router-link>
-        <router-link to="/settings" class="nav-item" :class="{ active: $route.path === '/settings' }">
-          <i class="fas fa-cog icon-settings"></i>
-          <span>设置</span>
-        </router-link>
-        <router-link v-if="authStore.isAdmin" to="/admin" class="nav-item" :class="{ active: $route.path === '/admin' }">
-          <i class="fas fa-users-cog icon-admin"></i>
-          <span>用户管理</span>
-        </router-link>
-        <router-link to="/about-author" class="nav-item" :class="{ active: $route.path === '/about-author' }">
-          <i class="fas fa-user-circle icon-author"></i>
-          <span>关于作者</span>
-        </router-link>
       </nav>
     </aside>
 
@@ -179,6 +171,85 @@ const analysisTabs = [
 ]
 const analysisOpen = ref(route.path === '/analysis')
 const currentTab = computed(() => route.query.tab || 'yearly')
+
+// 左侧导航「分组折叠」结构:每组含若干导航项(保留各自 to/图标/文案)
+const navGroups = [
+  {
+    key: 'analysis',
+    label: '分析',
+    items: [
+      { path: '/', label: '首页', icon: 'fas fa-home icon-home' },
+      { path: '/analysis', label: '数据分析', icon: 'fas fa-chart-pie icon-analysis' },
+      { path: '/insights', label: '消费洞察', icon: 'fas fa-lightbulb icon-insights' },
+      { path: '/annual', label: '年度账单', icon: 'fas fa-gift icon-annual' },
+    ],
+  },
+  {
+    key: 'assets',
+    label: '资产账目',
+    items: [
+      { path: '/networth', label: '资产负债', icon: 'fas fa-scale-balanced icon-networth' },
+      { path: '/transactions', label: '交易记录', icon: 'fas fa-receipt icon-transactions' },
+      { path: '/transfers', label: '转账记录', icon: 'fas fa-exchange-alt icon-transfers' },
+    ],
+  },
+  {
+    key: 'tools',
+    label: '工具设置',
+    items: [
+      { path: '/ai', label: 'AI 助手', icon: 'fas fa-robot icon-ai' },
+      { path: '/settings', label: '设置', icon: 'fas fa-cog icon-settings' },
+      { path: '/admin', label: '用户管理', icon: 'fas fa-users-cog icon-admin', adminOnly: true },
+      { path: '/about-author', label: '关于作者', icon: 'fas fa-user-circle icon-author' },
+    ],
+  },
+]
+
+// 折叠状态持久化:localStorage 记忆用户手动折叠/展开
+const NAV_GROUPS_KEY = 'xiaoyao_nav_groups'
+
+// 判断某组是否含当前路由(用于默认展开含当前项的分组)
+function groupHasActiveRoute(group) {
+  return group.items.some((item) => item.path === route.path)
+}
+
+// 读取持久化的折叠状态:默认全部展开,仅记忆用户手动折叠的组
+function loadGroupState() {
+  const state = {}
+  let saved = {}
+  try {
+    saved = JSON.parse(localStorage.getItem(NAV_GROUPS_KEY) || '{}') || {}
+  } catch {
+    saved = {}
+  }
+  for (const group of navGroups) {
+    if (groupHasActiveRoute(group)) {
+      // 含当前路由的组默认展开
+      state[group.key] = true
+    } else if (typeof saved[group.key] === 'boolean') {
+      state[group.key] = saved[group.key]
+    } else {
+      state[group.key] = true
+    }
+  }
+  return state
+}
+
+const groupState = ref(loadGroupState())
+
+function isGroupOpen(key) {
+  return groupState.value[key] !== false
+}
+
+// 切换分组展开/收起,并写入 localStorage
+function toggleGroup(key) {
+  groupState.value = { ...groupState.value, [key]: !isGroupOpen(key) }
+  try {
+    localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(groupState.value))
+  } catch {
+    // 忽略持久化失败(如隐私模式禁用 localStorage)
+  }
+}
 
 // 默认密码安全提醒:仍用初始口令且本次会话未手动关闭时显示(改密后 must_change_pw 自动转 false)
 const pwNudgeDismissed = ref(false)
@@ -379,6 +450,42 @@ onMounted(async () => {
 .subnav-item:hover { background: var(--hover-bg); color: var(--primary-color); }
 .subnav-item.active { background: var(--hover-bg); color: var(--primary-color); font-weight: 500; }
 
+/* 分组导航:分组标题(可折叠)+ 分组内容 */
+.nav-section {
+  margin-bottom: var(--space-xs);
+}
+.nav-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 2 * var(--space-sm));
+  margin: var(--space-sm) var(--space-sm) var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--secondary-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: color var(--transition-fast);
+}
+.nav-section-title:hover { color: var(--text-color); }
+.nav-section-title:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+.nav-section-caret {
+  font-size: 10px;
+  transition: transform var(--transition-base);
+}
+.nav-section-caret.open { transform: rotate(180deg); }
+.nav-section-body {
+  display: flex;
+  flex-direction: column;
+}
+
 .content {
   flex: 1;
   margin-left: var(--sidebar-width);
@@ -577,6 +684,16 @@ onMounted(async () => {
     flex-direction: column;
     gap: 8px;
     text-align: center;
+  }
+
+  /* 折叠态:分组标题(纯文本)整体隐藏,hover 展开侧栏时再显示 */
+  .nav-section-title {
+    display: none;
+  }
+
+  .sidebar:hover .nav-section-title,
+  .sidebar.active .nav-section-title {
+    display: flex;
   }
 
   /* 移动端隐藏筛选按钮文本 */
