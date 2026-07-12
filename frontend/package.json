@@ -1,7 +1,7 @@
 {
-  "name": "xiaoyao-private-bill-analyzer",
+  "name": "xiaoxiao-bill",
   "version": "1.0.0",
-  "description": "小遥账单助手 - 前端项目",
+  "description": "小小账单 - 前端项目",
   "type": "module",
   "scripts": {
     "dev": "vite",

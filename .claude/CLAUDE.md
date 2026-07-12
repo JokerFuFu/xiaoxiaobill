@@ -1,4 +1,4 @@
-# 小遥账单助手 - 项目开发规范
+# 小小账单 - 项目开发规范
 
 > **文档版本**: v1.0
 > **创建日期**: 2026-02-17
@@ -24,7 +24,7 @@
 
 ### 1.1 产品定位
 
-小遥账单助手是一个**隐私优先**的个人账单分析工具，支持支付宝和微信账单的自动解析和多维度数据可视化分析。
+小小账单是一个**隐私优先**的个人账单分析工具（fork 自 dtsola/xiaoyaoprivatebill，见 LICENSE 与 README 致谢），支持支付宝和微信账单的自动解析和多维度数据可视化分析。
 
 **核心特点**：
 - 数据完全本地处理，不上传任何服务器
@@ -379,7 +379,7 @@ npm run test
 **后端 (.env)**：
 ```bash
 # 应用配置
-APP_NAME=小遥账单助手
+APP_NAME=小小账单
 APP_ENV=production
 DEBUG=False
 
@@ -398,7 +398,7 @@ UPLOAD_FOLDER=/tmp/flask_uploads
 VITE_API_BASE_URL=/api
 
 # 其他配置
-VITE_APP_TITLE=小遥账单助手
+VITE_APP_TITLE=小小账单
 ```
 
 ### 6.2 构建流程

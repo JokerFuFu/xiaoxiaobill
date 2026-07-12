@@ -1,4 +1,4 @@
-# 小遥账单助手
+# 小小账单
 
 > 隐私优先的个人账单分析工具，数据完全本地处理，不上传任何服务器
 
@@ -9,81 +9,35 @@
 
 [English](README_EN.md) | 简体中文
 
-> 🍴 **本项目 Fork 自 [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill)。**
-> 在原作者以 MIT 协议开源的基础上，本 Fork 扩展了**银行账单接入、转入/转出口径、转账记录页、渠道分析、交易明细多维筛选**等功能。
-> 原项目与原作者信息见下文「[作者介绍](#作者介绍)」与「[致谢](#致谢)」，所有新增内容同样遵循 MIT 协议。
-
-<p align="center">
-  <img src="docs/产品文档/产品截图/宣传海报图.png" alt="小遥账单助手宣传海报">
-</p>
+> 🍴 **血统声明**：本项目基于 [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill)（小遥账单助手，MIT 协议）深度二次开发，并已演进为独立项目「小小账单」。原作者信息与完整致谢见文末「[致谢](#致谢)」，所有代码同样以 MIT 协议开源。
 
 ---
 
 ## 简介
 
-<p align="center">
-  <img src="docs/产品文档/logos/logo.png" alt="小遥账单助手" width="200">
-</p>
-
-小遥账单助手是一个**隐私优先**的个人账单分析工具，支持支付宝和微信账单的自动解析和多维度数据可视化分析。
+小小账单是一个**隐私优先**的个人账单分析工具：把支付宝、微信、银行的账单文件导入本地，自动解析、跨源去重，生成年度/月度/分类/时间/渠道等多维度可视化分析，并内置可选的 AI 账单助手。
 
 **核心特点**：
 - 🔒 **隐私安全** - 数据完全本地处理，不上传任何服务器
 - 🔐 **手动清除** - 随时手动清除账单数据，完全掌控您的财务隐私
-- 📊 **多维度分析** - 年度、月度、分类、时间、消费洞察
-- 📁 **多格式支持** - 支付宝 CSV、微信 CSV/XLSX、银行对账单 CSV
-- 🏦 **银行账单接入**（本 Fork） - 银行 PDF 对账单转 CSV 后导入，自动按方向归类收支/转账
-- 🔀 **转账记录独立**（本 Fork） - 转入/转出口径，平台转账·红包·自转账单列「转账记录」
-- 💳 **渠道分析**（本 Fork） - 按银行卡（储蓄/信用·区分卡号）、电子钱包、支付宝、微信多维拆解
+- 📁 **多来源账单** - 支付宝 CSV、微信 CSV/XLSX、银行 PDF 对账单（民生/农行/中行）、网商银行 XLSX
+- ♻️ **跨源去重** - 交易级去重，平台代扣自动计入「不计收支」，避免同一笔消费双算
+- 📊 **多维度分析** - 年度、月度、分类、时间、渠道、消费洞察、收入分析
+- 🔀 **转账口径** - 收入/支出/转入/转出/不计收支五分类，转账记录独立成页
+- 💳 **渠道分析** - 按银行卡（储蓄/信用·区分卡号）、电子钱包、支付宝、微信多维拆解
+- 👨‍👩‍👧 **多用户与成员** - 登录鉴权、按用户隔离数据、家庭成员维度归属
+- 🤖 **AI 助手（可选）** - 对话查账、账单智能识别导入、各维度智能分析报告；不配置也不影响全部分析功能
+- 📬 **邮箱自动导入** - IMAP 拉取账单邮件，自动解密 zip/PDF，定时导入
+- 💰 **净资产与对账** - 资产负债快照、对账中心、资金性质口径规则
 - 🚀 **快速部署** - Docker 一键启动，开箱即用
-- 💻 **前后端分离** - Vue 3 + Flask 架构，易于维护扩展
+- 💻 **前后端分离** - Vue 3 + Flask 架构，无数据库、纯文件存储
 - 📱 **响应式设计** - 支持桌面端和移动端访问
 
 ---
 
-## 作者介绍
-
-<p align="center">
-  <img src="docs/产品文档/产品截图/作者头像.jpg" alt="dtsola" width="120" height="120" style="border-radius: 50%;">
-</p>
-
-<p align="center">
-  <b>dtsola</b> — IT解决方案架构师 | 一人公司实践者
-</p>
-
-<p align="center">
-  🌐 <a href="https://www.dtsola.com">个人站点</a> &nbsp;|&nbsp;
-  📺 <a href="https://space.bilibili.com/736015">B站</a> &nbsp;|&nbsp;
-  💬 微信：dtsola（技术交流 | 商务合作）
-</p>
-
-<p align="center">
-  <img src="docs/产品文档/产品截图/个人二维码.png" alt="微信二维码" width="120">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/运营文档/开发者交流群图.png" alt="开发者交流群" width="120">
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/运营文档/用户交流群图.png" alt="用户交流群" width="120">
-</p>
-
-<p align="center">
-  <small>微信联系 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 开发者交流群 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 用户交流群</small>
-</p>
-
----
-
-## 本 Fork 的增强
-
-> 以下为本 Fork（[JokerFuFu/xiaoyaoprivatebill](https://github.com/JokerFuFu/xiaoyaoprivatebill)）相对原项目 [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill) 新增的能力，沿用原项目 MIT 协议。
-
-- **🏦 银行账单接入**：新增 `parsers/bank.py`（民生 / 农行 / 中行 PDF 对账单解析）与 `parsers/bank_csv.py`（银行 PDF → 支付宝样式 CSV），导入后来源标记为「银行」。
-- **♻️ 跨源去重**：交易级去重，且银行侧的「平台代扣（支付宝 / 财付通快捷支付）」自动计入「不计收支」，避免与平台账单对同一笔消费双算。
-- **🔀 转入 / 转出口径与转账记录**：收/支扩展为 `收入 / 支出 / 转入 / 转出 / 不计收支`；平台转账·红包·群收款与银行自转 / 对外 / 理财 / 还款按方向归一；新增 **「转账记录」** 页（交易记录的子集）。
-- **💳 渠道分析**：新增 **「渠道分析」** 页与 `/api/channel_analysis`，按平台（支付宝 / 微信 / 银行）、资金渠道（银行卡区分储蓄 / 信用 + 卡号、电子钱包）、信用 vs 储蓄、月度趋势等多维统计；同一张实体卡跨平台自动归并。
-- **🔎 交易明细增强**：新增 **「渠道」列** 与按渠道筛选，可叠加 时间段 / 类型 / 金额范围 / 关键字 筛选，底部汇总与饼图 / 折线图随筛选结果联动。
-
----
-
 ## 功能预览
+
+> 以下截图为品牌更名前的界面（应用内旧名「小遥账单助手」），新版视觉更新后将替换。
 
 ### 上传账单 - 一键导入
 
@@ -93,23 +47,8 @@
 <td width="50%">
 <ul>
 <li>📤 支持拖拽上传账单文件</li>
-<li>📋 自动识别支付宝/微信账单格式</li>
+<li>📋 自动识别支付宝/微信/银行账单格式</li>
 <li>⚡ 快速解析，一键生成分析报告</li>
-</ul>
-</td>
-</tr>
-</table>
-
-### 首页 - 功能入口
-
-<table>
-<tr>
-<td width="50%"><img src="docs/产品文档/产品截图/01-首页.png" alt="首页"></td>
-<td width="50%">
-<ul>
-<li>🎯 全能账单分析工具 - 支持支付宝和微信账单</li>
-<li>📊 4大功能卡片 - 多维度分析、隐私保护、趋势追踪、智能搜索</li>
-<li>🚀 快捷操作 - 上传账单文件或查看示例数据</li>
 </ul>
 </td>
 </tr>
@@ -202,7 +141,7 @@
 <td width="50%">
 <ul>
 <li>📋 完整交易明细，每一笔都清晰</li>
-<li>🔍 多维度筛选，快速找到目标</li>
+<li>🔍 多维度筛选（时间/类型/金额/渠道/关键字），快速找到目标</li>
 <li>📤 支持导出，方便进一步分析</li>
 </ul>
 </td>
@@ -226,7 +165,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/dtsola/xiaoyaoprivatebill.git
+git clone https://github.com/JokerFuFu/xiaoyaoprivatebill.git
 cd xiaoyaoprivatebill
 
 # 2.（可选）配置环境变量：复制模板后按需修改管理员密码 / AI Key
@@ -282,9 +221,9 @@ docker-compose restart
 # 1. 进入后端目录
 cd backend
 
-# 2. 创建并激活虚拟环境（Windows）
-py -3.10 -m venv venv
-venv\Scripts\activate
+# 2. 创建并激活虚拟环境
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # 3. 安装依赖
 pip install -r requirements.txt
@@ -314,11 +253,12 @@ npm run dev
 # 前端构建生产版本
 npm run build
 
-# 预览生产构建
-npm run preview
+# 前端测试 / 代码检查
+npm run test
+npm run lint
 
-# 后端退出虚拟环境
-deactivate
+# 后端测试
+cd backend && pytest
 ```
 
 ---
@@ -338,18 +278,22 @@ deactivate
 2. 点击「常见问题」→ 下载账单
 3. 选择时间范围 → 输入邮箱 → 选择 CSV/XLSX 格式
 
+**银行对账单**：
+在手机银行/网银申请导出 PDF 对账单（当前适配民生/农行/中行），直接上传即可；也可在「设置 → 邮箱导入」配置 IMAP 后自动拉取账单邮件。
+
 ### 2. 上传分析
 
 1. 访问应用首页
 2. 点击「上传账单」按钮
-3. 选择下载好的账单文件（CSV/XLSX）
+3. 选择下载好的账单文件（CSV/XLSX/PDF）
 4. 等待解析完成，自动跳转到分析页面
 
 ### 3. 数据导出
 
 分析完成后，可以将结果导出为：
-- PNG 图片（图表截图）
+- PNG 图片（图表截图 / AI 对话分享图）
 - CSV 数据（原始数据）
+- Markdown（AI 对话记录）
 
 ---
 
@@ -361,10 +305,11 @@ deactivate
 |------|------|------|
 | Python | 3.10+ | 后端开发语言 |
 | Flask | 2.0+ | Web 框架 |
-| Pandas | Latest | 数据处理核心 |
-| NumPy | Latest | 数值计算 |
-| OpenPyXL | Latest | Excel 文件处理 |
-| pdfplumber | Latest | 银行 PDF 对账单解析（本 Fork） |
+| Flask-Login / Flask-Session | - | 多用户鉴权与会话 |
+| Pandas / NumPy | Latest | 数据处理核心 |
+| pdfplumber / pikepdf | Latest | 银行 PDF 对账单解析与解密 |
+| OpenPyXL / pyzipper | Latest | Excel 处理、账单压缩包解密 |
+| APScheduler | Latest | 邮箱账单定时导入 |
 
 ### 前端
 
@@ -380,22 +325,22 @@ deactivate
 
 | 技术 | 说明 |
 |------|------|
-| Docker | 容器化部署 |
-| Docker Compose | 服务编排 |
-| Nginx | Web 服务器 |
+| Docker / Docker Compose | 容器化一键部署 |
+| Nginx | 前端静态托管与 API 反向代理 |
 
 ---
 
 ## 项目结构
 
 ```
-xiaoyaoprivatebill/
+./
 ├── backend/               # 后端项目（Flask + Pandas）
-│   ├── api/              # API 路由层
+│   ├── api/              # API 路由层（12 个蓝图）
 │   ├── services/         # 业务逻辑层
-│   ├── parsers/          # 文件解析模块
+│   ├── parsers/          # 账单解析模块（支付宝/微信/银行/网商）
 │   ├── utils/            # 工具函数
-│   ├── data/             # 临时数据目录
+│   ├── data/             # 运行时数据目录（不入库）
+│   ├── tests/            # pytest 测试
 │   ├── app.py            # 应用入口
 │   ├── config.py         # 配置管理
 │   ├── Dockerfile        # 后端镜像构建
@@ -409,7 +354,7 @@ xiaoyaoprivatebill/
 │   │   ├── stores/      # 状态管理（Pinia）
 │   │   └── utils/       # 工具函数
 │   ├── nginx.conf       # Nginx 配置
-│   ├── Dockerfile       # 前端镜像构建
+│   ├── Dockerfile       # 前端镜像构建（多阶段，容器内 build）
 │   ├── package.json     # 依赖配置
 │   └── vite.config.js   # Vite 配置
 │
@@ -433,18 +378,19 @@ xiaoyaoprivatebill/
 
 ## 致谢
 
-**本 Fork 基于 [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill) 二次开发**，在其完整的 Vue 3 + Flask 架构上新增了银行账单接入、转入/转出口径、转账记录与渠道分析等功能。衷心感谢原作者 **dtsola** 的开源工作（作者信息见上文「[作者介绍](#作者介绍)」）。
+小小账单站在两位开源作者的肩膀上，衷心感谢：
 
-而原项目 [xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill) 的前后端又完全重构自优秀开源项目 [alipay_record_analysis](https://github.com/Hessel2333/alipay_record_analysis)，感谢更上游的作者 **Hessel2333** 提供的灵感和基础代码。
+> 致谢链路：**Hessel2333**（[alipay_record_analysis](https://github.com/Hessel2333/alipay_record_analysis)，最初的灵感与基础代码）→ **dtsola**（[xiaoyaoprivatebill / 小遥账单助手](https://github.com/dtsola/xiaoyaoprivatebill)，本项目的直接上游）→ **小小账单**（本项目，JokerFuFu 维护）。
 
-> 致谢链路：**Hessel2333**（alipay_record_analysis）→ **dtsola**（xiaoyaoprivatebill，本 Fork 的直接上游）→ **本 Fork**（JokerFuFu）。
-
-原作者 dtsola 在 Hessel2333 项目基础上的改进：
+**dtsola** 在 Hessel2333 项目基础上完成了奠基性工作（本项目直接继承）：
 - 前端从 Jinja2 模板重构为 Vue 3 + Vite 现代化架构
 - 后端从单体应用重构为模块化蓝图架构
-- 优化前端、后端性能
-- 优化数据可视化展示
+- 优化前后端性能与数据可视化展示
 - 添加 Docker 一键部署能力
+
+原作者 dtsola 的主页：[dtsola.com](https://www.dtsola.com) · [B 站](https://space.bilibili.com/736015)
+
+**本项目在上游基础上的主要演进**：银行 PDF 对账单接入与跨源去重、转入/转出口径与转账记录、渠道分析、多用户登录与数据隔离、家庭成员维度、AI 账单助手（对话/识别/分析）、邮箱 IMAP 自动导入、净资产与对账中心、收入分析、大规模组件化重构与测试补齐。
 
 ---
 
@@ -476,13 +422,14 @@ xiaoyaoprivatebill/
 
 A: 目前支持：
 - 支付宝 CSV 账单
-- 微信 CSV 账单
-- 微信 XLSX 账单
-- 银行对账单 CSV（由银行 PDF 对账单转换为支付宝样式，本 Fork 新增）
+- 微信 CSV / XLSX 账单
+- 银行 PDF 对账单（民生/农行/中行，支持密码解密）
+- 网商银行 / 余利宝 XLSX
+- 邮箱 IMAP 自动拉取上述账单附件
 
 ### Q: 数据会上传到服务器吗？
 
-A: 不会。所有数据处理完全在本地进行，不上传任何服务器。
+A: 不会。所有数据处理完全在本地进行，不上传任何服务器。AI 功能为可选项，只有你主动配置并使用时，相关查询结果才会发送到你自己指定的模型端点。
 
 ### Q: 支持移动端吗？
 
@@ -499,17 +446,16 @@ A:
 
 ## 许可证
 
-本项目沿用上游的 [MIT 许可证](LICENSE)，版权归原作者所有：`Copyright (c) 2026 dtsola`。
-本 Fork 的所有新增与修改同样以 MIT 协议开源，使用时请保留原始版权与许可声明。
+本项目以 [MIT 许可证](LICENSE) 开源。版权声明采用叠加方式：原作品版权归 **dtsola** 所有，本项目新增与修改部分版权归 **JokerFuFu** 所有。使用时请保留完整的版权与许可声明。
 
 ---
 
 ## 联系方式
 
-- 本 Fork: [JokerFuFu/xiaoyaoprivatebill](https://github.com/JokerFuFu/xiaoyaoprivatebill)
-- 原项目（上游）: [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill)
+- 项目主页: [JokerFuFu/xiaoyaoprivatebill](https://github.com/JokerFuFu/xiaoyaoprivatebill)
+- 上游项目: [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill)
 - 问题反馈: [Issues](https://github.com/JokerFuFu/xiaoyaoprivatebill/issues)
 
 ---
 
-**本 Fork 基于 dtsola 的 [小遥账单助手](https://github.com/dtsola/xiaoyaoprivatebill) 二次开发 · Made with ❤️**
+**小小账单 · 基于 dtsola 的小遥账单助手二次开发 · Made with ❤️**

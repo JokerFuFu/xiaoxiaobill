@@ -180,7 +180,7 @@ def _connect(cfg):
     M = imaplib.IMAP4_SSL(host, port, timeout=25)
     # 网易系要求 IMAP ID,否则报 Unsafe Login;其他服务商发了也无害
     try:
-        M.xatom('ID', '("name" "xiaoyaobill" "version" "1.0" "vendor" "xiaoyaoprivatebill")')
+        M.xatom('ID', '("name" "xiaoxiaobill" "version" "1.0" "vendor" "xiaoxiaobill")')
     except Exception:
         pass
     try:
