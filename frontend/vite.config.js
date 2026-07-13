@@ -16,8 +16,10 @@ export default defineConfig(({ command }) => ({
     port: 3000,
     proxy: {
       // 开发时代理 API 请求到 Flask 后端
+      // 用 127.0.0.1 而非 localhost:macOS 上 node 会把 localhost 解析为 ::1,
+      // 撞上 AirPlay Receiver 占用的 IPv6 5000 端口
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true
       }
     }
