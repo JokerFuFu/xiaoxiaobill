@@ -47,7 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     isDemo.value = false
     checked.value = true
-    localStorage.removeItem('xiaoyao_demo_mode')
+    localStorage.removeItem('xiaoxiao_demo_mode')
   }
 
   return { user, isDemo, checked, isAuthenticated, isAdmin, displayName, ensureLoaded, refresh, login, logout }

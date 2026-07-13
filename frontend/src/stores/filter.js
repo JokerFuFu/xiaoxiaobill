@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 // LocalStorage key
-const FILTER_KEY = 'xiaoyao_transaction_filter'
+const FILTER_KEY = 'xiaoxiao_transaction_filter'
 
 // 筛选类型定义
 export const FilterType = {

@@ -206,7 +206,7 @@ const navGroups = [
 ]
 
 // 折叠状态持久化:localStorage 记忆用户手动折叠/展开
-const NAV_GROUPS_KEY = 'xiaoyao_nav_groups'
+const NAV_GROUPS_KEY = 'xiaoxiao_nav_groups'
 
 // 判断某组是否含当前路由(用于默认展开含当前项的分组)
 function groupHasActiveRoute(group) {

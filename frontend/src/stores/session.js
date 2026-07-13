@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue'
 import api from '@/api/client'
 
 // LocalStorage key
-const DEMO_MODE_KEY = 'xiaoyao_demo_mode'
+const DEMO_MODE_KEY = 'xiaoxiao_demo_mode'
 
 export const useSessionStore = defineStore('session', () => {
   // 从 localStorage 恢复演示模式状态
