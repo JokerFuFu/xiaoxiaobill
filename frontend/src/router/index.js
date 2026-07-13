@@ -19,7 +19,8 @@ const routes = [
   { path: '/ai', name: 'ai', component: () => import('@/views/AI.vue') },
   { path: '/admin', name: 'admin', component: () => import('@/views/Admin.vue'), meta: { admin: true } },
   { path: '/settings', name: 'settings', component: () => import('@/views/Settings.vue') },
-  { path: '/about-author', name: 'about-author', component: () => import('@/views/AboutAuthor.vue') }
+  { path: '/about', name: 'about', component: () => import('@/views/About.vue') },
+  { path: '/about-author', redirect: '/about' }
 ]
 
 const router = createRouter({
