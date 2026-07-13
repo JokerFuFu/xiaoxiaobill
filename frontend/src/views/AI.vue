@@ -4,7 +4,7 @@
     <div class="ai-header">
       <div class="ai-title">
         <div class="ai-logo-badge">
-          <img src="/images/logo_128.png" alt="小遥" />
+          <img src="/images/logo_128.png" alt="小小" />
         </div>
         <div>
           <h2>AI 助手</h2>
@@ -68,7 +68,7 @@
           <!-- 欢迎态 -->
           <div v-if="messages.length === 0" class="welcome">
             <img src="/images/logo_128.png" class="welcome-logo" alt="" />
-            <h3>你好，我是小遥</h3>
+            <h3>你好，我是小小</h3>
             <p>你的私人账单分析师，支持表格和图表回答</p>
             <div class="suggest-grid">
               <button v-for="ex in examples" :key="ex.q" class="suggest-card" @click="quickAsk(ex.q)">
@@ -479,9 +479,9 @@ function selectedList() {
 
 function selectionToMarkdown() {
   const title = (chats.value.find(c => c.id === chatId.value)?.title) || '对话'
-  const lines = [`# ${title}`, '', `> 来自 小遥账单 AI 助手 · ${new Date().toLocaleString('zh-CN')}`, '']
+  const lines = [`# ${title}`, '', `> 来自 小小账单 AI 助手 · ${new Date().toLocaleString('zh-CN')}`, '']
   for (const m of selectedList()) {
-    lines.push(m.role === 'user' ? '## 🙋 我' : '## 🤖 小遥', '', serializeContent(m.content), '')
+    lines.push(m.role === 'user' ? '## 🙋 我' : '## 🤖 小小', '', serializeContent(m.content), '')
   }
   return lines.join('\n')
 }
@@ -496,7 +496,7 @@ function docSelected() {
   const blob = new Blob([selectionToMarkdown()], { type: 'text/markdown;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
-  a.download = `小遥对话-${title.slice(0, 16)}.md`
+  a.download = `小小对话-${title.slice(0, 16)}.md`
   a.click()
   URL.revokeObjectURL(a.href)
   exitSelect()
@@ -515,7 +515,7 @@ async function imgSelected() {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
         <img src="/images/logo_128.png" style="width:42px;height:42px;object-fit:contain"/>
         <div>
-          <div style="font-size:16px;font-weight:600;color:#1d1d1f">小遥账单 · ${title}</div>
+          <div style="font-size:16px;font-weight:600;color:#1d1d1f">小小账单 · ${title}</div>
           <div style="font-size:11.5px;color:#86868b">${new Date().toLocaleString('zh-CN')}</div>
         </div>
       </div>`
@@ -539,7 +539,7 @@ async function imgSelected() {
       wrap.appendChild(c)
     }
     wrap.insertAdjacentHTML('beforeend',
-      '<div style="text-align:center;font-size:11px;color:#b3b8bf;margin-top:8px">—— 由 小遥账单助手 生成 ——</div>')
+      '<div style="text-align:center;font-size:11px;color:#b3b8bf;margin-top:8px">—— 由 小小账单 生成 ——</div>')
     document.body.appendChild(wrap)
     const canvas = await html2canvas(wrap, { scale: 2, useCORS: true, backgroundColor: '#f5f7fa', logging: false })
     document.body.removeChild(wrap)
@@ -569,7 +569,7 @@ function closePreview() {
 function downloadImg() {
   const a = document.createElement('a')
   a.href = imgPreview.value
-  a.download = `小遥对话-${imgTitle.value.slice(0, 12)}.png`
+  a.download = `小小对话-${imgTitle.value.slice(0, 12)}.png`
   a.click()
   ui.showSuccess('图片已下载')
 }
