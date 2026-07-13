@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-head">
         <img src="/images/logo_128.png" alt="logo" class="login-logo" />
-        <h1>小遥账单助手</h1>
+        <h1>小小账单</h1>
         <p class="sub">隐私优先 · 多用户记账</p>
       </div>
 

@@ -17,7 +17,7 @@
 
     <!-- 报告主体(分享时截这一块) -->
     <div v-else ref="reportRef" class="report">
-      <div class="report-brand">{{ year }} 年度账单 · 小遥账单助手</div>
+      <div class="report-brand">{{ year }} 年度账单 · 小小账单</div>
 
       <!-- Hero -->
       <div class="hero">

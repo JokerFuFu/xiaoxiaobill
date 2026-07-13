@@ -24,8 +24,8 @@
     <!-- 侧边栏 -->
     <aside class="sidebar">
       <div class="logo">
-        <img src="/images/logo_128.png" alt="小遥账单助手" class="logo-icon" />
-        <span>小遥账单</span>
+        <img src="/images/logo_128.png" alt="小小账单" class="logo-icon" />
+        <span>小小账单</span>
       </div>
 
       <!-- 当前用户 / 登出(置顶,避免被底部浮动筛选条遮挡) -->
@@ -200,7 +200,7 @@ const navGroups = [
       { path: '/ai', label: 'AI 助手', icon: 'fas fa-robot icon-ai' },
       { path: '/settings', label: '设置', icon: 'fas fa-cog icon-settings' },
       { path: '/admin', label: '用户管理', icon: 'fas fa-users-cog icon-admin', adminOnly: true },
-      { path: '/about-author', label: '关于作者', icon: 'fas fa-user-circle icon-author' },
+      { path: '/about', label: '关于', icon: 'fas fa-user-circle icon-author' },
     ],
   },
 ]
