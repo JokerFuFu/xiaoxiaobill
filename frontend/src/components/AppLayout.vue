@@ -533,15 +533,15 @@ onMounted(async () => {
   background: #E65100;
 }
 
-/* 默认密码安全提醒横幅 */
+/* 默认密码安全提醒横幅(危险语义统一走 token 色) */
 .pw-banner {
-  background: #FFF1F0;
-  color: #C0392B;
+  background: #FFF0EF;
+  color: var(--danger-color);
   padding: 10px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #FBD5D0;
+  border-bottom: 1px solid #FFD6D3;
   position: sticky;
   top: 0;
   z-index: 1001;
@@ -550,16 +550,16 @@ onMounted(async () => {
 .pw-content i { font-size: 16px; }
 .pw-actions { display: flex; align-items: center; gap: 8px; }
 .pw-go-btn {
-  background: #C0392B; color: #fff; border: none;
+  background: var(--danger-color); color: #fff; border: none;
   padding: 6px 16px; border-radius: var(--radius-sm);
   font-size: 13px; cursor: pointer; text-decoration: none; transition: background 0.2s ease;
 }
-.pw-go-btn:hover { background: #A93226; }
+.pw-go-btn:hover { background: #E0342A; }
 .pw-close-btn {
-  background: transparent; border: none; color: #C0392B;
+  background: transparent; border: none; color: var(--danger-color);
   cursor: pointer; font-size: 15px; padding: 4px 6px; line-height: 1;
 }
-.pw-close-btn:hover { color: #A93226; }
+.pw-close-btn:hover { color: #E0342A; }
 
 /* 全局加载状态 */
 .global-loader {

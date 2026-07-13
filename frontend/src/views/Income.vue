@@ -511,8 +511,8 @@ onUnmounted(() => {
   color: var(--text-color); border-radius: var(--radius-sm); font-size: 13px; cursor: pointer;
   transition: all .2s;
 }
-.year-btn:hover { border-color: #34C759; }
-.year-btn.active { background: #34C759; color: #fff; border-color: #34C759; }
+.year-btn:hover { border-color: var(--primary-color); }
+.year-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
 .year-note { font-size: 11px; color: var(--text-secondary, #8E8E93); margin: 0; }
 
 .state-box { padding: 60px 0; text-align: center; color: var(--text-secondary, #8E8E93); }

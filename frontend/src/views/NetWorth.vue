@@ -490,8 +490,8 @@ onUnmounted(() => {
   border-radius: 9px; cursor: pointer; transition: all .15s;
 }
 .nw-tab i { font-size: 13px; opacity: .85; }
-.nw-tab:hover { background: #f3f5f9; color: #34C759; }
-.nw-tab.active { background: #34C759; color: #fff; box-shadow: 0 4px 12px rgba(52,199,89,.22); }
+.nw-tab:hover { background: #f3f5f9; color: var(--primary-color); }
+.nw-tab.active { background: var(--primary-color); color: #fff; box-shadow: 0 4px 12px rgba(0, 122, 255, 0.22); }
 
 .page-header {
   display: flex; justify-content: space-between; align-items: flex-start;
@@ -505,7 +505,7 @@ onUnmounted(() => {
 
 /* 按钮 */
 .primary-btn {
-  padding: 9px 18px; background: #34C759; color: #fff; border: none;
+  padding: 9px 18px; background: var(--primary-color); color: #fff; border: none;
   border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px; transition: opacity .2s; flex-shrink: 0;
 }
@@ -569,7 +569,7 @@ onUnmounted(() => {
   background: var(--card-bg); color: var(--text-color); font-size: 13px; outline: none;
   transition: border-color .2s;
 }
-.text-input:focus, .select-input:focus, .num-input:focus { border-color: #34C759; }
+.text-input:focus, .select-input:focus, .num-input:focus { border-color: var(--primary-color); }
 
 /* 快照表单 */
 .form-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
