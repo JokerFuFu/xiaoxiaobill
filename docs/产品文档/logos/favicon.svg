@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 小小账单 favicon:据定稿 logo(钱币+账本)简化的几何版 -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#007AFF"/>
+  <!-- 账本条纹 -->
+  <rect x="50" y="30" width="50" height="9" rx="4.5" fill="#fff"/>
+  <rect x="54" y="45" width="46" height="9" rx="4.5" fill="#fff"/>
+  <rect x="58" y="60" width="42" height="9" rx="4.5" fill="#fff"/>
+  <rect x="58" y="75" width="42" height="9" rx="4.5" fill="#fff"/>
+  <rect x="54" y="90" width="46" height="9" rx="4.5" fill="#fff"/>
+  <!-- 星孔圆币 -->
+  <circle cx="45" cy="78" r="25" fill="#fff"/>
+  <path d="M45 62 C47 71, 52 76, 61 78 C52 80, 47 85, 45 94 C43 85, 38 80, 29 78 C38 76, 43 71, 45 62 Z" fill="#007AFF"/>
+</svg>
