@@ -165,7 +165,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/JokerFuFu/xiaoyaoprivatebill.git
+git clone https://github.com/JokerFuFu/xiaoxiaobill.git
 cd xiaoyaoprivatebill
 
 # 2.（可选）配置环境变量：复制模板后按需修改管理员密码 / AI Key
@@ -452,9 +452,9 @@ A:
 
 ## 联系方式
 
-- 项目主页: [JokerFuFu/xiaoyaoprivatebill](https://github.com/JokerFuFu/xiaoyaoprivatebill)
+- 项目主页: [JokerFuFu/xiaoxiaobill](https://github.com/JokerFuFu/xiaoxiaobill)
 - 上游项目: [dtsola/xiaoyaoprivatebill](https://github.com/dtsola/xiaoyaoprivatebill)
-- 问题反馈: [Issues](https://github.com/JokerFuFu/xiaoyaoprivatebill/issues)
+- 问题反馈: [Issues](https://github.com/JokerFuFu/xiaoxiaobill/issues)
 
 ---
 

@@ -42,7 +42,7 @@
         </li>
       </ol>
       <p class="license-note">
-        许可证：<a href="https://github.com/JokerFuFu/xiaoyaoprivatebill/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>，
+        许可证：<a href="https://github.com/JokerFuFu/xiaoxiaobill/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>，
         版权声明采用叠加方式——原作品 © dtsola，本项目新增与修改部分 © JokerFuFu。
       </p>
     </section>

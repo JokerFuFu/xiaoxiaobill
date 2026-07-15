@@ -35,7 +35,7 @@ XiaoxiaoBill imports your Alipay / WeChat / bank statement files locally, parses
 
 ```bash
 # 1. Clone
-git clone https://github.com/JokerFuFu/xiaoyaoprivatebill.git
+git clone https://github.com/JokerFuFu/xiaoxiaobill.git
 cd xiaoyaoprivatebill
 
 # 2. (Optional) copy the env template and adjust admin password / AI key
